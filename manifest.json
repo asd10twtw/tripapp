@@ -1,0 +1,25 @@
+
+{
+  "name": "Seoul Go!",
+  "short_name": "Seoul Go!",
+  "description": "時光膠囊 - 2026首爾冬日之旅專屬手冊",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FCFBF7",
+  "theme_color": "#3D74B6",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/q7MRYbCz/seoul.jpg",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://i.postimg.cc/q7MRYbCz/seoul.jpg",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

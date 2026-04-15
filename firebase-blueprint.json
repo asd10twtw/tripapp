@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "Trip": {
+      "title": "Trip",
+      "description": "A travel itinerary container",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "coverImage": { "type": "string" },
+        "memberUids": { "type": "array", "items": { "type": "string" } },
+        "ownerUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "startDate", "endDate", "memberUids", "ownerUid", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "Member": {
+      "title": "Member",
+      "description": "A travel companion within a trip",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Maps to UserProfile.uid" },
+        "name": { "type": "string" },
+        "avatar": { "type": "string" },
+        "color": { "type": "string" }
+      },
+      "required": ["id", "name", "avatar", "color"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "A schedule item within a trip",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "title": { "type": "string" },
+        "location": { "type": "string" },
+        "category": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "category", "createdAt"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "A financial transaction within a trip",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "amountKRW": { "type": "number" },
+        "amountTWD": { "type": "number" },
+        "payerId": { "type": "string" },
+        "splitWithIds": { "type": "array", "items": { "type": "string" } },
+        "category": { "type": "string" }
+      },
+      "required": ["date", "description", "amountKRW", "payerId", "splitWithIds"]
+    },
+    "Todo": {
+      "title": "Todo",
+      "description": "A task or shopping item within a trip",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "text": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "type": { "type": "string", "enum": ["todo", "packing", "shopping"] }
+      },
+      "required": ["ownerId", "text", "completed", "type"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "A travel diary entry within a trip",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "authorId": { "type": "string" },
+        "content": { "type": "string" }
+      },
+      "required": ["date", "authorId", "content"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "Global user profiles"
+    },
+    "/trips/{tripId}": {
+      "schema": "Trip",
+      "description": "Travel trips"
+    },
+    "/trips/{tripId}/members/{memberId}": {
+      "schema": "Member",
+      "description": "Trip members"
+    },
+    "/trips/{tripId}/events/{eventId}": {
+      "schema": "Event",
+      "description": "Trip schedule"
+    },
+    "/trips/{tripId}/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Trip expenses"
+    },
+    "/trips/{tripId}/todos/{todoId}": {
+      "schema": "Todo",
+      "description": "Trip todos"
+    },
+    "/trips/{tripId}/journal/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "Trip journal entries"
+    },
+    "/trips/{tripId}/config/{configId}": {
+      "schema": "object",
+      "description": "Trip-specific configuration"
+    },
+    "/events/{id}": {
+      "schema": "Event",
+      "description": "Legacy root events (migration only)"
+    },
+    "/expenses/{id}": {
+      "schema": "Expense",
+      "description": "Legacy root expenses (migration only)"
+    },
+    "/todos/{id}": {
+      "schema": "Todo",
+      "description": "Legacy root todos (migration only)"
+    },
+    "/journal/{id}": {
+      "schema": "JournalEntry",
+      "description": "Legacy root journal entries (migration only)"
+    }
+  }
+}

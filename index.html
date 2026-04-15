@@ -1,0 +1,189 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Seoul Go!">
+    <link rel="apple-touch-icon" href="https://i.postimg.cc/q7MRYbCz/seoul.jpg">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#3D74B6">
+    
+    <title>Seoul Go!</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@100;300;400;500;700&family=Noto+Serif+TC:wght@400;500;700&family=Gaegu:wght@400;700&family=Zhi+Mang+Xing&family=Patrick+Hand&family=Raleway:wght@300;400&family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&family=Yuji+Syuku&family=Varela+Round&family=Kosugi+Maru&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/gh/justfont/open-huninn-font@1.1/font/jf-openhuninn-1.1.css" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Inter"', '"Noto Sans TC"', 'sans-serif'],
+              serif: ['"Noto Serif TC"', 'serif'],
+              hand: ['"Gaegu"', 'cursive'],
+              chenyu: ['"Zhi Mang Xing"', 'cursive'],
+              patrick: ['"Patrick Hand"', 'cursive'],
+              raleway: ['"Raleway"', 'sans-serif'],
+              qingsong: ['"Ma Shan Zheng"', 'cursive'],
+              yozai: ['"Yuji Shuky"', 'serif'],
+              hipster: ['"Raleway"', '"Yuji Syuku"', 'serif'],
+              handdrawn: ['"jf-openhuninn"', '"Kosugi Maru"', '"Noto Sans TC"', 'cursive'],
+            },
+            colors: {
+              paper: '#FFFFFF',
+              sky: {
+                400: 'var(--brand-color)', /* 使用動態主題色 */
+                500: '#2F5D94',
+                600: '#224773',
+              },
+              brand: {
+                50: '#FDFCF6',
+                100: '#FBF5DE', /* 指定的黃色 */
+                400: '#FBF5DE',
+                500: '#EBDDB0',
+              }
+            },
+            boxShadow: {
+              'soft': '0 4px 15px -2px rgba(61, 116, 182, 0.08)',
+              'active': '0 8px 20px -3px rgba(61, 116, 182, 0.2)',
+              'nav': '0 -2px 10px -2px rgba(0,0,0,0.03)',
+              'brand-glow': '0 4px 12px 0 rgba(251, 245, 222, 0.5)',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --brand-color: #3D74B6;
+        --brand-text: #FFFFFF;
+      }
+      body {
+        background-color: #FCFBF7;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-user-select: none;
+        font-family: 'Inter', 'Noto Sans TC', sans-serif;
+        transition: background-color 0.3s ease;
+      }
+
+      /* Global Theme Styles */
+      body.theme-hipster {
+        background-color: #FDFCF8; /* Clean minimalist paper */
+        font-family: 'Raleway', 'Yuji Syuku', serif;
+        font-weight: 300;
+      }
+      body.theme-handdrawn {
+        background-color: #F9F5E6; /* Warm sketchbook paper */
+        background-image: 
+          linear-gradient(90deg, rgba(75, 63, 63, 0.03) 1px, transparent 1px),
+          linear-gradient(rgba(75, 63, 63, 0.03) 1px, transparent 1px);
+        background-size: 30px 30px;
+        font-family: 'jf-openhuninn', 'Kosugi Maru', 'Noto Sans TC', cursive;
+        color: #4B3F35; /* Dark brown ink color */
+        letter-spacing: 0.15em;
+      }
+      body.theme-minimalist {
+        background-color: #F8FAFC; /* Clean slate white */
+        font-family: 'Inter', sans-serif;
+      }
+
+      /* Theme-specific UI adjustments */
+      .theme-handdrawn .rounded-2xl, 
+      .theme-handdrawn .rounded-3xl,
+      .theme-handdrawn .rounded-[24px],
+      .theme-handdrawn .rounded-[32px],
+      .theme-handdrawn .rounded-[40px],
+      .theme-handdrawn .rounded-xl,
+      .theme-handdrawn .rounded-lg,
+      .theme-handdrawn .rounded-full {
+        border: none !important;
+        box-shadow: none !important;
+      }
+      .theme-handdrawn .handdrawn-border {
+        border: 1.5px solid rgba(75, 63, 53, 0.4) !important;
+        border-radius: 2px !important;
+        box-shadow: 3px 3px 0 0 rgba(75, 63, 53, 0.1) !important;
+      }
+      .theme-handdrawn input, .theme-handdrawn button {
+        border-radius: 2px !important;
+        border: 1.5px solid rgba(75, 63, 53, 0.4) !important;
+        letter-spacing: 0.1em;
+      }
+      .theme-handdrawn {
+        letter-spacing: 0.05em;
+      }
+      .theme-handdrawn p, .theme-handdrawn span, .theme-handdrawn div {
+        letter-spacing: 0.06em;
+      }
+      .theme-handdrawn .bg-white {
+        background-color: #FFFFFF !important;
+      }
+
+      /* Washi Tape Pattern */
+      .washi-tape-grid {
+        background-image: 
+          repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.2) 5px, rgba(255,255,255,0.2) 10px),
+          linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px),
+          linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px);
+        background-size: 100% 100%, 8px 8px, 8px 8px;
+        backdrop-blur: 1px;
+      }
+
+      .theme-hipster .rounded-2xl, 
+      .theme-hipster .rounded-3xl,
+      .theme-hipster .rounded-[24px],
+      .theme-hipster .rounded-[32px],
+      .theme-hipster .rounded-[40px] {
+        border-radius: 0px !important;
+        border-color: #E5E7EB !important;
+      }
+      .theme-hipster .shadow-sm,
+      .theme-hipster .shadow-md,
+      .theme-hipster .shadow-lg,
+      .theme-hipster .shadow-xl,
+      .theme-hipster .shadow-soft {
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1) !important;
+      }
+
+      .theme-minimalist .rounded-2xl, 
+      .theme-minimalist .rounded-3xl,
+      .theme-minimalist .rounded-[24px],
+      .theme-minimalist .rounded-[32px],
+      .theme-minimalist .rounded-[40px] {
+        border-radius: 24px !important;
+      }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      
+      .page-transition {
+        animation: fadeIn 0.25s ease-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      main {
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+      
+      input, textarea {
+        font-family: inherit;
+      }
+    </style>
+    <script type="module" src="/index.tsx"></script>
+</head>
+  <body>
+    <div id="root"></div>
+</body>
+</html>
