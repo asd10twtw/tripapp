@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Trip, UserProfile } from '../types';
-import { Plus, Calendar, MapPin, LogOut, Settings, User as UserIcon, Trash2, Wallet, Star } from 'lucide-react';
+import { Plus, Calendar, MapPin, LogOut, Settings, User as UserIcon, Trash2, Wallet, Star, Award, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints } from 'lucide-react';
 import { db, logout } from '../services/firebase';
 import { collection, query, where, onSnapshot, addDoc, orderBy, getDocs, limit, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -88,6 +88,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
 
   const getThemeStyles = () => {
     switch (user.profileTheme) {
+      case 'handdrawn':
+        return {
+          container: 'bg-[#F9F5E6]',
+          font: 'font-handdrawn',
+          accent: 'text-[#8B5E3C]',
+          card: 'bg-white border-[1.5px] border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.03)]',
+        };
       case 'scrapbook':
         return {
           container: 'bg-[#FDFCF8] paper-texture',
@@ -102,6 +109,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
           accent: 'text-stone-400',
           card: 'bg-white border border-stone-100 shadow-sm',
         };
+      case 'minimalist':
+        return {
+          container: 'bg-[#F8FAFC]',
+          font: 'font-sans',
+          accent: 'text-slate-400',
+          card: 'bg-white border border-slate-100 shadow-soft',
+        };
       default:
         return {
           container: 'bg-white',
@@ -114,27 +128,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
 
   const styles = getThemeStyles();
 
-  const TripCard: React.FC<{ trip: Trip, index: number }> = ({ trip, index }) => {
-    if (user.profileTheme === 'scrapbook') {
-      const isCompleted = new Date(trip.endDate) < new Date();
+  const formatHanddrawnText = (text: string) => {
+    if (user.profileTheme !== 'handdrawn' && user.profileTheme !== 'scrapbook') return text;
+    return text.split(/(\s+)/).map((part, i) => {
+      if (/^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/.test(part)) {
+        return <span key={i} className="tracking-[0.25em]">{part}</span>;
+      }
+      return part;
+    });
+  };
+
+  const TripCard: React.FC<{ trip: Trip, index: number, theme?: string, isCompact?: boolean }> = ({ trip, index, theme, isCompact }) => {
+    const currentTheme = theme || user.profileTheme;
+    
+    if (currentTheme === 'hipster') {
       return (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.1 }}
           onClick={() => onSelectTrip(trip.id)}
-          className={`relative aspect-[4/5] bg-white p-2 group cursor-pointer active:scale-[0.98] transition-all shadow-sm border border-stone-200/60`}
+          className={`bg-white group cursor-pointer active:scale-95 transition-all shadow-sm border border-stone-100 hover:shadow-md ${isCompact ? 'p-3 pb-8' : 'p-4 pb-12'}`}
         >
-          <div className="w-full h-full relative overflow-hidden">
-            <img src={trip.coverImage} alt={trip.name} className="w-full h-full object-cover" />
-            <div className="absolute inset-x-0 bottom-0 bg-white/90 backdrop-blur-sm p-2 border-t border-stone-100">
-              <h3 className="text-[10px] font-black text-stone-700 truncate">{trip.name}</h3>
-              <p className="text-[8px] text-stone-400 mt-0.5">{trip.startDate.replace(/-/g, '.')}</p>
-            </div>
+          <div className={`relative overflow-hidden ${isCompact ? 'aspect-square mb-3' : 'aspect-[4/3] mb-5'}`}>
+            <img src={trip.coverImage} alt={trip.name} className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 group-hover:scale-105 transition-all duration-1000" />
+            <div className="absolute inset-0 ring-1 ring-inset ring-black/5" />
           </div>
-          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-8 h-3 washi-tape-grid bg-stone-200/50 rotate-1" />
-          <div className="absolute -bottom-1 -right-1 text-amber-400/40 rotate-12 group-hover:scale-110 transition-transform">
-            <Star size={12} fill="currentColor" />
+          <div className="space-y-1">
+            <h3 className={`text-stone-700 font-hipster leading-tight truncate ${isCompact ? 'text-xs' : 'text-base'}`}>{trip.name}</h3>
+            <div className="flex items-center gap-2 text-[9px] font-hipster text-stone-400">
+              <span className="tracking-widest uppercase">{trip.startDate.replace(/-/g, '.')}</span>
+              {trip.city && <span className="opacity-50">/</span>}
+              {trip.city && <span className="tracking-widest uppercase">{trip.city}</span>}
+            </div>
           </div>
         </motion.div>
       );
@@ -152,7 +178,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
           <img src={trip.coverImage} alt={trip.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
           <div className="absolute bottom-4 left-5 right-5">
-            <h3 className="text-base font-black text-white leading-tight mb-1">{trip.name}</h3>
+            <h3 className="text-base font-black text-white leading-tight mb-1">{formatHanddrawnText(trip.name)}</h3>
             <div className="flex items-center gap-3 text-white/80 text-[9px] font-bold">
               <span className="flex items-center gap-1"><Calendar size={10} /> {trip.startDate.replace(/-/g, '.')}</span>
               {trip.city && <span className="flex items-center gap-1"><MapPin size={10} /> {trip.city}</span>}
@@ -164,27 +190,116 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
   };
 
   return (
-    <div className={`flex-1 overflow-y-auto no-scrollbar ${styles.container} ${styles.font}`}>
-      {user.profileTheme === 'scrapbook' ? (
-        <div className="px-6 pt-12 pb-32 space-y-8">
-          {/* Scrapbook Header */}
-          <div className="flex justify-between items-center">
-            <div className="space-y-1">
-              <h1 className="text-2xl font-black text-stone-700 font-handdrawn">
-                嗨，{user.displayName.split(' ')[0]} 👋
-              </h1>
-              <p className="text-xs font-bold text-stone-400 font-handdrawn">
-                下一趟旅程還有 <span className="text-lg text-stone-700">{daysUntilNextTrip}</span> 天 ✈️
-              </p>
-            </div>
-            <div className="relative">
-              <div className="absolute -top-2 -right-2 w-6 h-6 bg-rose-200/60 rounded-full blur-sm" />
-              <div className="w-12 h-12 rounded-full border-2 border-stone-200 p-0.5 bg-white shadow-sm overflow-hidden relative z-10">
-                <img src={user.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.uid} alt="" className="w-full h-full rounded-full object-cover" />
-              </div>
-            </div>
+    <div className={`flex-1 overflow-y-auto no-scrollbar ${styles.container} ${styles.font} relative`}>
+      {/* Universal Header (Top Row) */}
+      <div className="px-6 pt-12 pb-8 flex justify-between items-center relative z-10">
+        <div className="space-y-1">
+          <h1 className={`text-2xl font-black ${
+            user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'text-stone-700 font-handdrawn' : 
+            user.profileTheme === 'hipster' ? 'text-stone-700 font-hipster' :
+            'text-slate-800'
+          }`}>
+            嗨，{user.displayName.split(' ')[0]} 👋
+          </h1>
+          <p className={`text-xs font-bold ${
+            user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'text-stone-400 font-handdrawn' : 
+            user.profileTheme === 'hipster' ? 'text-stone-400 font-hipster' :
+            'text-slate-400'
+          }`}>
+            下一趟旅程還有 <span className={`text-lg ${
+              user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' || user.profileTheme === 'hipster' ? 'text-stone-700' : 'text-slate-800'
+            }`}>{daysUntilNextTrip}</span> 天 ✈️
+          </p>
+        </div>
+        <div className="relative">
+          {(user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook') && (
+            <div className="absolute -top-2 -right-2 w-6 h-6 bg-rose-200/60 rounded-full blur-sm" />
+          )}
+          <div className={`w-12 h-12 rounded-full border-2 p-0.5 bg-white shadow-sm overflow-hidden relative z-10 ${
+            user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' || user.profileTheme === 'hipster' ? 'border-stone-200' : 'border-slate-100'
+          }`}>
+            <img src={user.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.uid} alt="" className="w-full h-full rounded-full object-cover" />
+          </div>
+        </div>
+      </div>
+
+      {user.profileTheme === 'handdrawn' && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 opacity-20">
+          <div className="absolute top-[15%] right-[5%] rotate-[-12deg] text-[#3D74B6]">
+            <Compass size={64} strokeWidth={1.5} />
+          </div>
+          <div className="absolute top-[45%] right-[8%] rotate-[15deg] text-rose-500">
+            <Heart size={48} strokeWidth={1.5} fill="currentColor" />
+          </div>
+          <div className="absolute bottom-[25%] left-[5%] rotate-[-15deg] text-amber-500">
+            <Plane size={60} strokeWidth={1.5} />
+          </div>
+          <div className="absolute top-[28%] left-[8%] rotate-[12deg] text-emerald-500">
+            <Tent size={56} strokeWidth={1.5} />
+          </div>
+          <div className="absolute bottom-[40%] right-[15%] rotate-[-8deg] text-indigo-500">
+            <Camera size={52} strokeWidth={1.5} />
+          </div>
+          <div className="absolute top-[60%] left-[12%] rotate-[-20deg] text-orange-500">
+            <Sparkles size={48} strokeWidth={1.5} />
+          </div>
+          <div className="absolute bottom-[10%] right-[25%] rotate-[10deg] text-sky-500">
+            <Ticket size={44} strokeWidth={1.5} />
+          </div>
+          <div className="absolute top-[10%] left-[20%] rotate-[10deg] text-rose-300">
+            <Star size={40} strokeWidth={1.5} fill="currentColor" />
+          </div>
+          <div className="absolute bottom-[5%] left-[30%] rotate-[-5deg] text-green-400">
+            <Footprints size={44} strokeWidth={1.5} />
+          </div>
+        </div>
+      )}
+      {user.profileTheme === 'hipster' ? (
+        <div className="px-6 pb-32 space-y-10 relative z-10">
+          {/* Search Bar */}
+          <div className="relative mx-4">
+            <input 
+              type="text" 
+              placeholder="Search memories..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-3 bg-transparent border border-stone-200 rounded-xl outline-none text-xs text-stone-500 font-hipster text-center focus:border-stone-400 transition-colors"
+            />
           </div>
 
+          {/* Trip Lists */}
+          <div className="space-y-12">
+            {plannedTrips.length > 0 && (
+              <div className="space-y-6">
+                <div className="flex flex-col items-center gap-1">
+                  <h3 className="text-sm font-hipster text-stone-500 uppercase tracking-widest">Planned Journey</h3>
+                  <div className="w-6 h-px bg-stone-100" />
+                </div>
+                <div className="grid grid-cols-1 gap-8">
+                  {plannedTrips.map(trip => (
+                    <TripCard key={trip.id} trip={trip} theme={user.profileTheme} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {completedTrips.length > 0 && (
+              <div className="space-y-6">
+                <div className="flex flex-col items-center gap-1">
+                  <h3 className="text-sm font-hipster text-stone-500 uppercase tracking-widest">Recent Memories</h3>
+                  <div className="w-6 h-px bg-stone-100" />
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  {completedTrips.map(trip => (
+                    <TripCard key={trip.id} trip={trip} theme={user.profileTheme} isCompact />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? (
+        <div className="px-6 pb-32 space-y-8 relative z-10">
           {/* Search Bar */}
           <div className="relative">
             <input 
@@ -202,12 +317,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
           {/* Trip Lists */}
           <div className="space-y-10">
             {plannedTrips.length > 0 && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-4 bg-sky-300 rounded-full" />
-                  <h2 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] font-handdrawn">未完成的旅程 ({plannedTrips.length})</h2>
+                  <div className="w-1.5 h-4 bg-sky-300 rounded-full" />
+                  <h2 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] font-handdrawn">正在進行中 ({plannedTrips.length})</h2>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-6">
                   {plannedTrips.map((trip, index) => (
                     <TripCard key={trip.id} trip={trip} index={index} />
                   ))}
@@ -216,12 +331,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
             )}
 
             {completedTrips.length > 0 && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-4 bg-rose-300 rounded-full" />
-                  <h2 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] font-handdrawn">已完成的旅程 ({completedTrips.length})</h2>
+                  <div className="w-1.5 h-4 bg-stone-300 rounded-full" />
+                  <h2 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] font-handdrawn">已完成的回憶 ({completedTrips.length})</h2>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-6">
                   {completedTrips.map((trip, index) => (
                     <TripCard key={trip.id} trip={trip} index={index + plannedTrips.length} />
                   ))}
@@ -247,14 +362,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         </div>
       ) : (
         <>
-          {/* Default/Hipster Header */}
-          <div className="px-6 pt-10 pb-3 flex justify-between items-center sticky top-0 z-30 backdrop-blur-sm">
-            <h1 className="text-xl font-black tracking-tight" style={{ color: 'var(--brand-color)' }}>GoGoTrip</h1>
-            <div className="w-10 h-10 rounded-full border-2 border-slate-50 overflow-hidden shadow-sm">
-              <img src={user.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.uid} alt="" className="w-full h-full object-cover" />
-            </div>
-          </div>
-
           <div className="px-6 mt-4">
             <div className="relative">
               <input 

@@ -410,20 +410,26 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
 
             <button 
                 onClick={openAddModal}
-                className={`w-full font-black py-4 shadow-active flex items-center justify-center space-x-2 active:scale-[0.98] transition-all mb-4 border ${
-                  theme === 'scrapbook' ? 'rounded-xl bg-[#8B5E3C] text-white border-[#8B5E3C]' : 'rounded-2xl'
+                className={`w-full font-black py-4 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all mb-4 border ${
+                  theme === 'scrapbook' ? 'rounded-xl bg-[#8B5E3C] text-white border-[#8B5E3C] shadow-active' : 
+                  theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35]/15 shadow-[4px_4px_0_0_rgba(75,63,53,0.05)] text-[#4B3F35]' :
+                  'rounded-2xl shadow-active'
                 }`}
-                style={theme !== 'scrapbook' ? { backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)', borderColor: 'rgba(var(--brand-color-rgb), 0.2)' } : {}}
+                style={(!['scrapbook', 'handdrawn'].includes(theme || '')) ? { backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)', borderColor: 'rgba(var(--brand-color-rgb), 0.2)' } : {}}
             >
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-soft ${theme === 'scrapbook' ? 'bg-white/20' : 'bg-white/20'}`}>
-                <Plus size={14} strokeWidth={4} style={{ color: theme === 'scrapbook' ? 'white' : 'var(--brand-text)' }} />
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-sm ${
+                theme === 'scrapbook' ? 'bg-white/20' : 
+                theme === 'handdrawn' ? 'bg-[#4B3F35] text-white' :
+                'bg-white/20'
+              }`}>
+                <Plus size={14} strokeWidth={4} style={{ color: theme === 'handdrawn' ? 'white' : (theme === 'scrapbook' ? 'white' : 'var(--brand-text)') }} />
               </div>
               <span className="text-sm tracking-tight uppercase">新增行程</span>
             </button>
 
-            <div className={`space-y-4 ${theme === 'scrapbook' ? 'relative pl-8' : ''}`}>
-            {theme === 'scrapbook' && filteredEvents.length > 0 && (
-              <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-stone-200 dashed-line" />
+            <div className={`space-y-4 ${theme === 'scrapbook' || theme === 'hipster' ? 'relative pl-8' : ''}`}>
+            {(theme === 'scrapbook' || theme === 'hipster') && filteredEvents.length > 0 && (
+              <div className={`absolute left-3 top-2 bottom-2 w-px dashed-line ${theme === 'hipster' ? 'bg-stone-300' : 'bg-stone-200'}`} />
             )}
             {filteredEvents.map((event, idx) => (
                 <div 
@@ -432,16 +438,18 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                     className={`p-5 active:scale-[0.98] transition-all relative group ${
                       theme === 'scrapbook'
                         ? 'bg-white border border-stone-200 shadow-sm rotate-[0.5deg] mb-6' 
+                      : theme === 'hipster'
+                        ? 'bg-white border border-stone-100 shadow-sm mb-6'
                         : theme === 'handdrawn'
                         ? 'bg-white border-[1.5px] border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.03)] rotate-[0.5deg] mb-6'
                         : 'bg-white rounded-[24px] border border-slate-50 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4'
                     }`}
                 >
-                    {theme === 'scrapbook' && (
+                    {(theme === 'scrapbook' || theme === 'hipster') && (
                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 flex flex-col items-center">
-                        <div className="w-3 h-3 rounded-full bg-white border-2 border-[#8B5E3C] z-10" />
+                        <div className={`w-3 h-3 rounded-full bg-white border-2 z-10 ${theme === 'hipster' ? 'border-stone-400 scale-90' : 'border-[#8B5E3C]'}`} />
                         {event.time && (
-                          <span className="text-[8px] font-black text-stone-400 mt-1 whitespace-nowrap -rotate-90">{event.time}</span>
+                          <span className={`text-[8px] font-black mt-1 whitespace-nowrap -rotate-90 ${theme === 'hipster' ? 'text-stone-300 font-hipster' : 'text-stone-400'}`}>{event.time}</span>
                         )}
                       </div>
                     )}
@@ -451,14 +459,14 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                       }`} />
                     )}
                     <div className="flex justify-between items-center mb-3">
-                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold border ${CATEGORY_COLORS[event.category] || 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold border ${theme === 'hipster' ? 'bg-stone-50 text-stone-400 border-stone-100 font-hipster' : (CATEGORY_COLORS[event.category] || 'bg-slate-50 text-slate-400 border-slate-100')}`}>
                             <span>{getCategoryIcon(event.category)}</span>
-                            <span className="tracking-tight">{event.category}</span>
+                            <span className="tracking-normal">{event.category}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           {event.time && (
-                            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400">
-                              <Clock size={12} className="opacity-60" style={{ color: 'var(--brand-color)' }} /> {event.time}
+                            <div className={`flex items-center gap-1 text-[11px] font-bold ${theme === 'hipster' ? 'text-stone-300 font-hipster' : 'text-slate-400'}`}>
+                              <Clock size={12} className="opacity-60" style={{ color: theme === 'hipster' ? undefined : 'var(--brand-color)' }} /> {event.time}
                             </div>
                           )}
                           <button 
@@ -469,8 +477,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                           </button>
                         </div>
                     </div>
-                    <h3 className="text-[14px] font-bold text-slate-800 leading-tight tracking-tight">{event.location}</h3>
-                    {event.notes && <p className="text-xs text-slate-400 font-medium mt-1 italic">{event.notes}</p>}
+                    <h3 className={`text-[14px] font-bold leading-tight tracking-normal ${theme === 'hipster' ? 'text-stone-600 font-hipster' : 'text-slate-800'}`}>{event.location}</h3>
+                    {event.notes && <p className={`text-xs font-medium mt-1 italic ${theme === 'hipster' ? 'text-stone-400 font-hipster' : 'text-slate-400'}`}>{event.notes}</p>}
                 </div>
             ))}
             {filteredEvents.length === 0 && selectedDate !== 'PRE_TRIP' && (

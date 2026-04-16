@@ -152,14 +152,20 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
         </div>
       </div>
 
-      <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-[32px] p-6 shadow-soft border border-slate-50 flex flex-col">
+      <div className={`flex-1 backdrop-blur-sm p-6 flex flex-col ${
+        theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.05)]' : 
+        'bg-white/80 rounded-[32px] shadow-soft border border-slate-50'
+      }`}>
         <h3 className="text-base font-black text-slate-800 mb-4">{activeMember?.name} 的願望</h3>
         
         <div className="space-y-3 overflow-y-auto no-scrollbar pb-10">
           {filteredTodos.map(item => (
             <div 
               key={item.id} 
-              className={`flex flex-col p-4 rounded-[24px] transition-all bg-white border border-slate-100 shadow-sm ${item.completed ? 'opacity-60' : ''}`}
+              className={`flex flex-col p-4 transition-all ${
+                theme === 'handdrawn' ? 'bg-white border border-[#4B3F35]/10 shadow-[2px_2px_0_0_rgba(75,63,53,0.02)]' : 
+                'bg-white rounded-[24px] border border-slate-100 shadow-sm'
+              } ${item.completed ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start gap-3">
                 <div 

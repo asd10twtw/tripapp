@@ -30,6 +30,9 @@ export const loginWithGoogle = async () => {
     return user;
   } catch (error) {
     console.error("Login failed:", error);
+    if (error instanceof Error) {
+      alert("登入失敗: " + error.message + "\n請確認是否已在 Firebase 控制台將此網域加入「授權網域」。");
+    }
     throw error;
   }
 };

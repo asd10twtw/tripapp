@@ -387,12 +387,14 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                       return (
                           <div key={exp.id} onClick={() => openEditModal(exp)} className={`py-4 px-4 flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all relative ${
                             theme === 'handdrawn' || theme === 'scrapbook'
-                              ? 'bg-white border border-stone-200 shadow-sm rotate-[0.1deg]'
+                              ? 'bg-white border border-[#4B3F35]/10 shadow-sm rotate-[0.1deg]'
                               : 'bg-white rounded-2xl shadow-soft border border-slate-50'
                           }`}>
-                          {theme === 'scrapbook' && (
+                          {(theme === 'scrapbook' || theme === 'handdrawn') && (
                             <div className={`absolute -top-1.5 -left-1 w-12 h-4 washi-tape-grid rotate-[-3deg] z-10 ${
-                              idx % 3 === 0 ? 'bg-sky-200/50' : idx % 3 === 1 ? 'bg-pink-200/50' : 'bg-amber-200/50'
+                              theme === 'handdrawn' 
+                                ? ['bg-[#8B5E3C]/30', 'bg-sky-200/40', 'bg-amber-200/40', 'bg-pink-200/40'][idx % 4]
+                                : idx % 3 === 0 ? 'bg-sky-200/50' : idx % 3 === 1 ? 'bg-pink-200/50' : 'bg-amber-200/50'
                             }`} />
                           )}
                           <div className="flex justify-between items-start">

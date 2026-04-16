@@ -115,7 +115,10 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, theme
         </div>
       </div>
 
-      <div className="flex-1 bg-white rounded-[32px] p-6 shadow-soft border border-slate-50 flex flex-col mb-8">
+      <div className={`flex flex-col p-6 flex-1 mb-8 ${
+        theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.05)]' : 
+        'bg-white rounded-[32px] shadow-soft border border-slate-50'
+      }`}>
         <h3 className="text-base font-black text-slate-800 mb-4">我的回憶</h3>
         
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -163,7 +166,10 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, theme
           const dateStr = `${dateObj.getMonth()+1}/${dateObj.getDate()} ${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
           
           return (
-            <div key={entry.id} className="bg-white p-5 rounded-[24px] shadow-soft border border-slate-50 transition-all">
+            <div key={entry.id} className={`${
+              theme === 'handdrawn' ? 'bg-white p-5 border border-[#4B3F35]/10 shadow-[2px_2px_0_0_rgba(75,63,53,0.02)]' : 
+              'bg-white p-5 rounded-[24px] shadow-soft border border-slate-50'
+            } transition-all`}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-slate-50">
                   <img src={author?.avatar} alt={author?.name} className="w-full h-full object-cover" />

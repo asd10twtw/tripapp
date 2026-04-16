@@ -21,7 +21,7 @@ export interface UserProfile {
   motto?: string;
   location?: string;
   interests?: string[];
-  profileTheme?: 'hipster' | 'minimalist' | 'scrapbook';
+  profileTheme?: 'hipster' | 'minimalist' | 'scrapbook' | 'handdrawn';
 }
 
 export interface Member {

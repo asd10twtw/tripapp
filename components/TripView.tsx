@@ -6,7 +6,7 @@ import { ScheduleView } from './ScheduleView';
 import { ExpenseView } from './ExpenseView';
 import { PlanningView } from './PlanningView';
 import { JournalView } from './JournalView';
-import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star } from 'lucide-react';
+import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDocs, query, orderBy, addDoc, limit, arrayUnion, deleteDoc, writeBatch, where, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -379,11 +379,52 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
 
   return (
     <div className={`h-screen flex flex-col max-w-[390px] mx-auto shadow-2xl relative overflow-hidden transition-colors duration-500 ${
-      user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6] border-x-[1.5px] border-[#4B3F35]/20 font-handdrawn' : 
+      user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6] border-x-[1.5px] border-[#4B3F35]/10 font-handdrawn' : 
       user.profileTheme === 'hipster' ? 'bg-[#FDFCF8] border-x border-stone-100 font-hipster' : 
       user.profileTheme === 'scrapbook' ? 'bg-[#FDFCF8] paper-texture border-x border-stone-200/50 font-handdrawn' :
-      'bg-white font-sans'
+      'bg-[#F8FAFC] font-sans'
     }`}>
+      {user.profileTheme === 'handdrawn' && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 opacity-20">
+          <div className="absolute top-40 right-4 rotate-12 text-sky-400/30">
+            <Compass size={48} strokeWidth={1.5} />
+          </div>
+          <div className="absolute bottom-60 left-4 -rotate-12 text-amber-400/30">
+            <Plane size={48} strokeWidth={1.5} />
+          </div>
+          <div className="absolute top-1/2 right-2 rotate-[-15deg] text-rose-400/30">
+            <Tent size={36} strokeWidth={1.5} />
+          </div>
+          <div className="absolute top-60 left-2 rotate-[20deg] text-emerald-400/30">
+            <Ticket size={32} strokeWidth={1.5} />
+          </div>
+          <div className="absolute bottom-20 left-10 rotate-[-10deg] text-indigo-400/30">
+            <Camera size={40} strokeWidth={1.5} />
+          </div>
+          <div className="absolute top-20 left-1/3 rotate-12 text-violet-400/20">
+            <Sparkles size={32} strokeWidth={1.5} />
+          </div>
+        </div>
+      )}
+      {user.profileTheme === 'hipster' && (
+        <>
+          <div className="absolute top-24 right-6 text-stone-200/40 rotate-12 pointer-events-none z-0">
+            <span className="text-4xl opacity-50">🍃</span>
+          </div>
+          <div className="absolute bottom-60 left-4 text-stone-200/30 -rotate-12 pointer-events-none z-0">
+            <span className="text-3xl opacity-40">🌿</span>
+          </div>
+          <div className="absolute top-1/2 left-4 text-stone-200/20 rotate-[-15deg] pointer-events-none z-0">
+            <Sparkles size={32} />
+          </div>
+          <div className="absolute bottom-20 right-10 text-stone-200/30 rotate-6 pointer-events-none z-0">
+            <Footprints size={40} className="rotate-[-20deg]" />
+          </div>
+          <div className="absolute top-40 left-6 text-stone-200/20 rotate-[20deg] pointer-events-none z-0">
+            <Camera size={28} />
+          </div>
+        </>
+      )}
       {user.profileTheme === 'scrapbook' && (
         <>
           <div className="absolute top-20 right-4 text-stone-200/40 rotate-12 pointer-events-none z-0">
@@ -404,12 +445,8 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
           <div className="absolute bottom-10 left-10 text-stone-200/25 rotate-[-10deg] pointer-events-none z-0">
             <span className="text-3xl">📷</span>
           </div>
-          {/* Hand-drawn line doodle */}
           <svg className="absolute top-[15%] left-0 w-full h-20 text-stone-200/20 pointer-events-none z-0" viewBox="0 0 400 100" preserveAspectRatio="none">
             <path d="M0,50 Q100,20 200,50 T400,50" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="5,5" />
-          </svg>
-          <svg className="absolute bottom-[10%] left-0 w-full h-20 text-stone-200/20 pointer-events-none z-0" viewBox="0 0 400 100" preserveAspectRatio="none">
-            <path d="M0,30 Q150,80 400,30" fill="none" stroke="currentColor" strokeWidth="1.5" />
           </svg>
         </>
       )}
@@ -417,6 +454,7 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
       <div className={`px-6 pt-6 pb-4 shrink-0 flex flex-col gap-4 relative z-30 backdrop-blur-sm ${
         user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6]/80 border-b border-[#4B3F35]/20' : 
         user.profileTheme === 'scrapbook' ? 'bg-[#FDFCF8]/80 border-b border-stone-200/50' :
+        user.profileTheme === 'minimalist' ? 'bg-[#F8FAFC]/80 border-b border-slate-200/50' :
         'bg-transparent'
       }`}>
         {/* Top Bar: Back, Share, Settings */}
@@ -458,23 +496,39 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
 
         {/* Trip Info & Members */}
         <div className="flex justify-between items-start">
-          <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-            <h1 className={`text-2xl font-black tracking-tighter leading-none uppercase truncate drop-shadow-sm ${
-              user.profileTheme === 'handdrawn' ? 'text-[#4B3F35]' : 
-              user.profileTheme === 'scrapbook' ? 'text-stone-700 font-handdrawn' :
-              ''
-            }`} style={(!['handdrawn', 'scrapbook'].includes(user.profileTheme || '')) ? { color: 'var(--brand-color)' } : {}}>
-              {trip?.name || 'SEOUL GO'}
-            </h1>
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
+            {user.profileTheme === 'hipster' ? (
+              <div className="flex flex-col">
+                <h2 className="text-[10px] font-hipster text-stone-400 uppercase tracking-[0.2em] mb-1">Journey</h2>
+                <h1 className="text-2xl font-hipster text-stone-700 tracking-tight truncate">
+                  {trip?.name || 'Exploring'}
+                </h1>
+              </div>
+            ) : (
+              <h1 className={`text-2xl font-black tracking-normal leading-none uppercase truncate drop-shadow-sm ${
+                user.profileTheme === 'handdrawn' ? 'text-[#4B3F35]' : 
+                user.profileTheme === 'scrapbook' ? 'text-stone-700 font-handdrawn' :
+                ''
+              }`} style={(!['handdrawn', 'scrapbook'].includes(user.profileTheme || '')) ? { color: 'var(--brand-color)' } : {}}>
+                {user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' 
+                  ? (trip?.name || 'SEOUL GO').split(/(\s+)/).map((part, i) => {
+                      if (/^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+$/.test(part)) {
+                        return <span key={i} className="tracking-[0.18em]">{part}</span>;
+                      }
+                      return part;
+                    })
+                  : (trip?.name || 'SEOUL GO')}
+              </h1>
+            )}
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-tighter ${
+              <span className={`text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-normal ${
                 user.profileTheme === 'handdrawn' ? 'bg-[#4B3F35] text-white' : 
                 user.profileTheme === 'scrapbook' ? 'bg-[#8B5E3C] text-white shadow-sm' :
                 'text-white'
               }`} style={(!['handdrawn', 'scrapbook'].includes(user.profileTheme || '')) ? { backgroundColor: 'var(--brand-color)' } : {}}>
                 {trip?.subtitle || '時光膠囊'}
               </span>
-              <div className={`text-[11px] font-black tracking-tight ${
+              <div className={`text-[11px] font-black tracking-normal ${
                 user.profileTheme === 'handdrawn' ? 'text-[#8B5E3C]' : 
                 user.profileTheme === 'scrapbook' ? 'text-stone-400' :
                 'text-slate-400'
@@ -550,15 +604,18 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
       </main>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-[390px] mx-auto px-6 pb-[env(safe-area-inset-bottom,16px)] pt-2 z-[60]">
-        <nav className={`backdrop-blur-md shadow-nav p-0.5 flex justify-between items-center ${
-          user.profileTheme === 'handdrawn' ? 'bg-white handdrawn-border' : 
-          user.profileTheme === 'scrapbook' ? 'bg-white border border-stone-200/50 rounded-[24px]' :
-          'bg-white/90 border border-slate-100/50 rounded-[24px]'
-        }`}>
+      <div className={`fixed bottom-0 left-0 right-0 max-w-[390px] mx-auto ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'px-6 pb-2' : 'px-6 pb-[env(safe-area-inset-bottom,16px)]'} pt-2 z-[60]`}>
+        <nav className={`
+          ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'border-2 border-[#4B3F35]/10 bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.04)] rounded-none flex' : 
+            'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
+          p-0 overflow-hidden justify-between items-stretch
+        `}>
           <NavButton active={activeTab === Tab.SCHEDULE} onClick={() => setActiveTab(Tab.SCHEDULE)} icon={Calendar} label="行程" theme={user.profileTheme} />
+          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
           <NavButton active={activeTab === Tab.EXPENSE} onClick={() => setActiveTab(Tab.EXPENSE)} icon={CircleDollarSign} label="記帳" theme={user.profileTheme} />
+          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
           <NavButton active={activeTab === Tab.PLANNING} onClick={() => setActiveTab(Tab.PLANNING)} icon={ShoppingBag} label="購物" theme={user.profileTheme} />
+          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
           <NavButton active={activeTab === Tab.JOURNAL} onClick={() => setActiveTab(Tab.JOURNAL)} icon={BookOpen} label="日誌" theme={user.profileTheme} />
         </nav>
       </div>
@@ -844,8 +901,8 @@ const MemberNameInput = ({ member, onUpdate }: { member: Member, onUpdate: (id: 
 };
 
 const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, label, theme }) => {
-  const isHanddrawn = theme === 'handdrawn';
-
+  const isHanddrawn = theme === 'handdrawn' || theme === 'scrapbook';
+  
   if (isHanddrawn) {
     return (
       <button 
@@ -859,20 +916,23 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
           {label}
         </span>
         {active && (
-          <div className="absolute inset-1 border-2 border-[#4B3F35]/40 pointer-events-none rounded-[12px] rotate-[-1.5deg]" />
+          <div className="absolute inset-0 border-[2.5px] border-[#4B3F35] pointer-events-none" />
         )}
       </button>
     );
   }
 
   return (
-    <button onClick={onClick} className="flex flex-col items-center justify-center flex-1 py-1 group relative">
+    <button onClick={onClick} className="flex flex-col items-center justify-center flex-1 py-2 group relative">
       <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-slate-300 group-active:scale-90'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
         <Icon size={20} strokeWidth={active ? 2.5 : 2} />
       </div>
-      <span className={`text-[9px] font-black mt-1 transition-colors duration-300 ${active ? '' : 'text-slate-300'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
+      <span className={`text-[9px] font-black mt-0.5 transition-colors duration-300 ${active ? '' : 'text-slate-300'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
         {label}
       </span>
+      {active && (
+        <motion.div layoutId="nav-active" className="absolute -bottom-1 w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--brand-color)' }} />
+      )}
     </button>
   );
 };

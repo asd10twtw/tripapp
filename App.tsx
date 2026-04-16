@@ -97,7 +97,7 @@ const App: React.FC = () => {
     }
 
     // Apply global theme class
-    const themeClass = user?.profileTheme === 'scrapbook' ? 'theme-handdrawn' : `theme-${user?.profileTheme || 'minimalist'}`;
+    const themeClass = user?.profileTheme === 'handdrawn' || user?.profileTheme === 'scrapbook' ? 'theme-handdrawn' : `theme-${user?.profileTheme || 'minimalist'}`;
     document.body.classList.remove('theme-minimalist', 'theme-hipster', 'theme-handdrawn', 'theme-watercolor');
     document.body.classList.add(themeClass);
   }, [user?.themeColor, user?.profileTheme]);
@@ -359,9 +359,9 @@ const App: React.FC = () => {
       </AnimatePresence>
 
       {/* Main Bottom Navigation */}
-      <div className={`fixed bottom-0 left-0 right-0 max-w-[390px] mx-auto ${user.profileTheme === 'scrapbook' ? 'px-6 pb-8' : 'px-6 pb-[env(safe-area-inset-bottom,16px)]'} pt-2 z-[60]`}>
+      <div className={`fixed bottom-0 left-0 right-0 max-w-[390px] mx-auto ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'px-6 pb-2' : 'px-6 pb-[env(safe-area-inset-bottom,16px)]'} pt-2 z-[60]`}>
         <nav className={`
-          ${user.profileTheme === 'scrapbook' ? 'border-2 border-[#4B3F35]/20 bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.05)] rounded-none flex' : 
+          ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'border-2 border-[#4B3F35]/10 bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.04)] rounded-none flex' : 
             user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
             user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
             'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
@@ -371,18 +371,18 @@ const App: React.FC = () => {
             active={activeMainTab === MainTab.HOME || activeMainTab === MainTab.TRIPS} 
             onClick={() => setActiveMainTab(MainTab.HOME)} 
             icon={Home} 
-            label={user.profileTheme === 'scrapbook' ? "行程" : "首頁"} 
+            label="首頁" 
             theme={user.profileTheme} 
           />
-          {user.profileTheme === 'scrapbook' && <div className="w-px bg-[#4B3F35]/10" />}
+          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
           <NavButton 
             active={false} 
             onClick={() => { setActiveMainTab(MainTab.HOME); setIsCreateModalOpen(true); }} 
             icon={PlusCircle} 
-            label={user.profileTheme === 'scrapbook' ? "旅程" : "新增"} 
+            label="新增" 
             theme={user.profileTheme} 
           />
-          {user.profileTheme === 'scrapbook' && <div className="w-px bg-[#4B3F35]/10" />}
+          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
           <NavButton 
             active={activeMainTab === MainTab.PROFILE} 
             onClick={() => setActiveMainTab(MainTab.PROFILE)} 
@@ -405,11 +405,11 @@ interface NavButtonProps {
 }
 
 const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, label, theme }) => {
-  const isScrapbook = theme === 'scrapbook';
+  const isHanddrawn = theme === 'handdrawn' || theme === 'scrapbook';
   const isHipster = theme === 'hipster';
   const isWatercolor = theme === 'watercolor';
   
-  if (isScrapbook) {
+  if (isHanddrawn) {
     return (
       <button 
         onClick={onClick} 
@@ -422,7 +422,7 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
           {label}
         </span>
         {active && (
-          <div className="absolute inset-1 border-2 border-[#4B3F35]/40 pointer-events-none rounded-[12px] rotate-[-1.5deg]" />
+          <div className="absolute inset-0 border-[2.5px] border-[#4B3F35] pointer-events-none" />
         )}
       </button>
     );
@@ -430,14 +430,17 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
 
   return (
     <button onClick={onClick} className={`flex flex-col items-center justify-center flex-1 py-2 group relative ${isHipster ? 'font-hipster' : isWatercolor ? 'font-sans italic' : ''}`}>
-      <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-slate-300 group-active:scale-90'}`} style={{ color: active ? 'var(--brand-color)' : (isWatercolor ? '#A5C4D4' : undefined) }}>
-        <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+      <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-stone-300 group-active:scale-90'}`} style={{ color: active ? (isHipster ? '#78716C' : 'var(--brand-color)') : (isWatercolor ? '#A5C4D4' : undefined) }}>
+        <Icon size={20} strokeWidth={active ? 2 : 1.5} />
       </div>
-      <span className={`text-[9px] font-black mt-0.5 transition-colors duration-300 ${active ? '' : (isWatercolor ? 'text-sky-200' : 'text-slate-300')}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
+      <span className={`text-[9px] font-bold mt-0.5 transition-colors duration-300 ${active ? '' : (isWatercolor ? 'text-sky-200' : 'text-stone-300')}`} style={{ color: active ? (isHipster ? '#78716C' : 'var(--brand-color)') : undefined }}>
         {label}
       </span>
-      {active && (
+      {active && !isHipster && (
         <motion.div layoutId="nav-active" className="absolute -bottom-1 w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--brand-color)' }} />
+      )}
+      {active && isHipster && (
+        <div className="absolute top-1 right-4 w-1 h-1 bg-stone-400 rounded-full" />
       )}
     </button>
   );
