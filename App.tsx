@@ -312,7 +312,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-transparent max-w-[390px] mx-auto shadow-2xl overflow-hidden relative">
+    <div className="h-screen w-full max-w-md mx-auto bg-[#FCFBF7] flex flex-col relative overflow-hidden font-sans">
       {renderMainContent()}
 
       {/* Join Trip Modal */}

@@ -1,8 +1,8 @@
 
 {
-  "name": "Seoul Go!",
-  "short_name": "Seoul Go!",
-  "description": "時光膠囊 - 2026首爾冬日之旅專屬手冊",
+  "name": "GoGoTrip",
+  "short_name": "GoGoTrip",
+  "description": "旅行手冊",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -10,13 +10,13 @@
   "theme_color": "#3D74B6",
   "icons": [
     {
-      "src": "https://i.postimg.cc/q7MRYbCz/seoul.jpg",
+      "src": "trippic.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://i.postimg.cc/q7MRYbCz/seoul.jpg",
+      "src": "trippic.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

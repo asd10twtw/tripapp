@@ -1,8 +1,10 @@
 
-const CACHE_NAME = 'seoul-go-v2';
+const CACHE_NAME = 'gogotrip';
 const ASSETS = [
   '/',
-  '/index.html'
+  '/index.html',
+  '/manifest.json',
+  '/index.tsx',
 ];
 
 self.addEventListener('install', (event) => {
