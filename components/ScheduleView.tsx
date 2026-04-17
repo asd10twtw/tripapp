@@ -259,8 +259,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
     });
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="w-full overflow-x-auto no-scrollbar pt-1 pb-4 mb-0">
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="w-full overflow-x-auto no-scrollbar pt-1 pb-4 mb-0 shrink-0">
         <div className="flex gap-3 px-8 min-w-max">
           {dates.map((d) => (
             <button
@@ -295,7 +295,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
       </div>
 
       <div 
-        className="flex-1 overflow-y-auto px-8 pb-32 no-scrollbar pt-0"
+        className="flex-1 min-h-0 overflow-y-auto px-8 pb-32 no-scrollbar pt-0"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}

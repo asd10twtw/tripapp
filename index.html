@@ -85,12 +85,24 @@
       body.theme-handdrawn {
         background-color: #F9F5E6; /* Warm sketchbook paper */
         background-image: 
-          linear-gradient(90deg, rgba(75, 63, 63, 0.03) 1px, transparent 1px),
-          linear-gradient(rgba(75, 63, 63, 0.03) 1px, transparent 1px);
-        background-size: 30px 30px;
+          radial-gradient(#4B3F35 0.5px, transparent 0.5px),
+          radial-gradient(#4B3F35 0.5px, #F9F5E6 0.5px);
+        background-size: 20px 20px;
+        background-position: 0 0, 10px 10px;
+        background-attachment: fixed;
         font-family: 'Nunito', 'jf-openhuninn', 'Kosugi Maru', 'Noto Sans TC', cursive;
         color: #4B3F35; /* Dark brown ink color */
         letter-spacing: 0.18em;
+        position: relative;
+      }
+      body.theme-handdrawn::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image: url("https://www.transparenttextures.com/patterns/natural-paper.png");
+        opacity: 0.4;
+        pointer-events: none;
+        z-index: -1;
       }
       body.theme-minimalist {
         background-color: #F1F5F9; /* Light gray (slate-100) */

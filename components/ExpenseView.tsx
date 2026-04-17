@@ -329,7 +329,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-transparent">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-transparent">
       <div className="px-6 pt-4 shrink-0 bg-transparent">
         <div className={`p-1 flex shadow-sm ${
           theme === 'handdrawn' || theme === 'scrapbook' ? 'bg-[#4B3F35]/5 rounded-none border border-[#4B3F35]/10' : 'bg-slate-100 rounded-xl'
@@ -360,7 +360,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
       </div>
 
       {activeSubTab === 'list' ? (
-        <div className="flex-1 overflow-y-auto px-6 pb-24 space-y-6 pt-4 no-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-24 space-y-6 pt-4 no-scrollbar">
             <div className="flex justify-between items-center px-1 relative">
                {theme === 'scrapbook' && (
                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-24 h-6 washi-tape-grid bg-amber-100/40 border-x border-amber-200/10 rotate-[-1deg] z-0" />
@@ -439,7 +439,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
             ))}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto px-6 pb-24 pt-4 space-y-6 no-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-24 pt-4 space-y-6 no-scrollbar">
             <div className="bg-sky-50 rounded-2xl p-5 border border-sky-100 shadow-soft">
                 <div className="flex justify-between items-center mb-4 gap-2">
                    <h4 className="text-sky-500 text-[10px] font-black tracking-tight uppercase shrink-0">匯率設定</h4>

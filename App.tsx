@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { UserProfile } from './types';
 import { subscribeToAuth, db } from './services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -6,6 +7,7 @@ import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { TripView } from './components/TripView';
 import { ProfileView } from './components/ProfileView';
+import { BackgroundDoodles } from './components/BackgroundDoodles';
 import { User } from 'firebase/auth';
 import { MainTab, Trip } from './types';
 import { Home, Map as MapIcon, PlusCircle, User as UserIcon } from 'lucide-react';
@@ -13,16 +15,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, orderBy, onSnapshot, getDocs, limit, addDoc, deleteDoc, arrayUnion, updateDoc } from 'firebase/firestore';
 
 const App: React.FC = () => {
-  console.log("App rendering...");
+  const navigate = useNavigate();
+  const location = useLocation();
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTripId, setActiveTripId] = useState<string | null>(null);
-  const [activeMainTab, setActiveMainTab] = useState<MainTab>(MainTab.TRIPS);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [joiningTripId, setJoiningTripId] = useState<string | null>(null);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(() => !sessionStorage.getItem('app_initialized'));
 
   // Handle URL parameters for sharing
   useEffect(() => {
@@ -33,6 +35,16 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Set session storage once loaded
+  useEffect(() => {
+    if (!loading && user) {
+      sessionStorage.setItem('app_initialized', 'true');
+    }
+  }, [loading, user]);
+
+  // Sync navigation with state if needed, but we'll use routes now
+  const activeMainTab = location.pathname.startsWith('/profile') ? MainTab.PROFILE : MainTab.TRIPS;
+
   // Check if user needs to join the trip
   useEffect(() => {
     if (joiningTripId && user && trips.length > 0) {
@@ -41,7 +53,7 @@ const App: React.FC = () => {
         setShowJoinModal(true);
       } else {
         // If already a member, just switch to that trip
-        setActiveTripId(joiningTripId);
+        navigate(`/trip/${joiningTripId}`);
         // Clear param to avoid re-triggering
         const url = new URL(window.location.href);
         url.searchParams.delete('tripId');
@@ -60,7 +72,7 @@ const App: React.FC = () => {
         await updateDoc(tripRef, {
           memberUids: arrayUnion(user.uid)
         });
-        setActiveTripId(joiningTripId);
+        navigate(`/trip/${joiningTripId}`);
         setShowJoinModal(false);
         setJoiningTripId(null);
         // Clear URL param
@@ -261,11 +273,29 @@ const App: React.FC = () => {
     }
   }, [trips]);
 
+  const getThemeBg = () => {
+    switch (user?.profileTheme) {
+      case 'handdrawn': return 'bg-[#F9F5E6]';
+      case 'hipster': return 'bg-[#FDFCF8]';
+      case 'minimalist': return 'bg-[#F1F5F9]';
+      default: return 'bg-[#FCFBF7]';
+    }
+  };
+
   if (loading) {
+    if (isFirstLoad) {
+      return (
+        <div className="min-h-screen bg-[#FCFBF7] flex flex-col items-center justify-center">
+          <div className="w-16 h-16 bg-sky-400 rounded-[28px] flex items-center justify-center mb-6 animate-pulse shadow-xl shadow-sky-400/20">
+            <img src="/trippic.png" alt="Logo" className="w-10 h-10 object-contain opacity-80" />
+          </div>
+          <div className="w-8 h-8 border-[3px] border-slate-200 border-t-sky-400 rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    // For non-first loads, show a minimal background or nothing to satisfy "skip splash screen"
     return (
-      <div className="min-h-screen bg-transparent flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
-      </div>
+      <div className={`min-h-screen ${getThemeBg()}`} />
     );
   }
 
@@ -273,125 +303,68 @@ const App: React.FC = () => {
     return <Login />;
   }
 
-  if (activeTripId) {
-    return (
-      <TripView 
-        tripId={activeTripId} 
-        user={user} 
-        onBack={() => setActiveTripId(null)} 
-      />
-    );
-  }
-
-  const renderMainContent = () => {
-    switch (activeMainTab) {
-      case MainTab.HOME:
-      case MainTab.TRIPS:
-        return (
-          <Dashboard 
-            user={user} 
-            trips={trips} 
-            onSelectTrip={(id) => setActiveTripId(id)} 
-            isCreateModalOpen={isCreateModalOpen} 
-            setIsCreateModalOpen={setIsCreateModalOpen} 
-          />
-        );
-      case MainTab.PROFILE:
-        return <ProfileView user={user} trips={trips} />;
-      default:
-        return (
-          <Dashboard 
-            user={user} 
-            trips={trips} 
-            onSelectTrip={(id) => setActiveTripId(id)} 
-            isCreateModalOpen={isCreateModalOpen} 
-            setIsCreateModalOpen={setIsCreateModalOpen} 
-          />
-        );
-    }
-  };
-
   return (
-    <div className="h-screen w-full max-w-md mx-auto bg-[#FCFBF7] flex flex-col relative overflow-hidden font-sans">
-      {renderMainContent()}
-
-      {/* Join Trip Modal */}
-      <AnimatePresence>
-        {showJoinModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+    <div className={`h-screen w-full max-w-md mx-auto flex flex-col relative overflow-hidden transition-colors duration-500 ${getThemeBg()} ${user.profileTheme === 'handdrawn' ? 'font-handdrawn' : user.profileTheme === 'hipster' ? 'font-hipster' : 'font-sans'}`}>
+      <BackgroundDoodles user={user} />
+      
+      <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
+        <Routes>
+          <Route path="/" element={
+            <Dashboard 
+              user={user} 
+              trips={trips} 
+              onSelectTrip={(id) => navigate(`/trip/${id}`)} 
+              isCreateModalOpen={isCreateModalOpen} 
+              setIsCreateModalOpen={setIsCreateModalOpen} 
             />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-xs bg-white rounded-[32px] p-8 shadow-2xl text-center"
-            >
-              <div className="w-16 h-16 bg-sky-50 rounded-full flex items-center justify-center mx-auto mb-4 text-sky-500">
-                <PlusCircle size={32} />
-              </div>
-              <h3 className="text-lg font-black text-slate-800 mb-2">加入新旅程？</h3>
-              <p className="text-slate-400 text-xs font-bold mb-8 leading-relaxed">
-                您被邀請加入一個新的旅程！<br/>點擊下方按鈕即可開始共同規劃。
-              </p>
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => { setShowJoinModal(false); setJoiningTripId(null); }}
-                  className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-500 text-xs font-black active:scale-95 transition-all"
-                >
-                  拒絕
-                </button>
-                <button 
-                  onClick={handleJoinTrip}
-                  className="flex-1 py-3.5 rounded-2xl text-white text-xs font-black shadow-lg active:scale-95 transition-all"
-                  style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.3)' }}
-                >
-                  加入旅程
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Main Bottom Navigation */}
-      <div className={`fixed bottom-0 left-0 right-0 max-w-[390px] mx-auto ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'px-6 pb-2' : 'px-6 pb-[env(safe-area-inset-bottom,16px)]'} pt-2 z-[60]`}>
-        <nav className={`
-          ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'border-2 border-[#4B3F35]/10 bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.04)] rounded-none flex' : 
-            user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
-            user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
-            'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
-          p-0 overflow-hidden justify-between items-stretch
-        `}>
-          <NavButton 
-            active={activeMainTab === MainTab.HOME || activeMainTab === MainTab.TRIPS} 
-            onClick={() => setActiveMainTab(MainTab.HOME)} 
-            icon={Home} 
-            label="首頁" 
-            theme={user.profileTheme} 
-          />
-          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
-          <NavButton 
-            active={false} 
-            onClick={() => { setActiveMainTab(MainTab.HOME); setIsCreateModalOpen(true); }} 
-            icon={PlusCircle} 
-            label="新增" 
-            theme={user.profileTheme} 
-          />
-          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
-          <NavButton 
-            active={activeMainTab === MainTab.PROFILE} 
-            onClick={() => setActiveMainTab(MainTab.PROFILE)} 
-            icon={UserIcon} 
-            label="個人" 
-            theme={user.profileTheme} 
-          />
-        </nav>
+          } />
+          <Route path="/profile" element={<ProfileView user={user} trips={trips} />} />
+          <Route path="/trip/:tripId" element={
+            <TripView 
+              user={user} 
+              onBack={() => navigate('/')} 
+            />
+          } />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
+
+      {/* Main Bottom Navigation (Only on main tabs) */}
+      {!location.pathname.startsWith('/trip/') && (
+        <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'px-6 pb-4' : 'px-6 pb-[env(safe-area-inset-bottom,16px)]'} pt-2 z-[60]`}>
+          <nav className={`
+            ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'border-2 border-[#4B3F35]/10 bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.04)] rounded-none flex' : 
+              user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
+              user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
+              'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
+            p-0 overflow-hidden justify-between items-stretch
+          `}>
+            <NavButton 
+              active={location.pathname === '/'} 
+              onClick={() => navigate('/')} 
+              icon={Home} 
+              label="首頁" 
+              theme={user.profileTheme} 
+            />
+            {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
+            <NavButton 
+              active={false} 
+              onClick={() => { navigate('/'); setIsCreateModalOpen(true); }} 
+              icon={PlusCircle} 
+              label="新增" 
+              theme={user.profileTheme} 
+            />
+            {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
+            <NavButton 
+              active={location.pathname === '/profile'} 
+              onClick={() => navigate('/profile')} 
+              icon={UserIcon} 
+              label="個人" 
+              theme={user.profileTheme} 
+            />
+          </nav>
+        </div>
+      )}
     </div>
   );
 };

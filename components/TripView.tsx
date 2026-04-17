@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Tab, Member, EventCategory, UserProfile, Trip } from '../types';
-import { MEMBERS } from '../constants';
 import { ScheduleView } from './ScheduleView';
 import { ExpenseView } from './ExpenseView';
 import { PlanningView } from './PlanningView';
 import { JournalView } from './JournalView';
-import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints } from 'lucide-react';
+import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDocs, query, orderBy, addDoc, limit, arrayUnion, deleteDoc, writeBatch, where, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -14,13 +14,19 @@ import * as XLSX from 'xlsx';
 import Cropper from 'react-easy-crop';
 
 interface TripViewProps {
-  tripId: string;
   user: UserProfile;
   onBack: () => void;
 }
 
-export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
+export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
+  const { tripId } = useParams<{ tripId: string }>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SCHEDULE);
+  
+  if (!tripId) {
+    navigate('/');
+    return null;
+  }
   const [members, setMembers] = useState<Member[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -34,6 +40,9 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [newMemberName, setNewMemberName] = useState('');
+  const [isDeleteTripModalOpen, setIsDeleteTripModalOpen] = useState(false);
   
   // Cropping state
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -119,14 +128,7 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
       fetchedMembers.sort((a, b) => a.id.localeCompare(b.id));
       
       const hasUser = fetchedMembers.some(m => m.id === user.uid);
-      const hasPlaceholders = fetchedMembers.some(m => m.id.startsWith('m'));
-      
       setMembers(fetchedMembers);
-
-      // If no placeholders and it's a relatively new trip (or just owner), seed them
-      if (!hasPlaceholders && fetchedMembers.length <= 1) {
-        seedMembers();
-      }
 
       // If user is in memberUids (handled by App.tsx) but not in members subcollection, show claim modal
       if (!hasUser && fetchedMembers.length > 0) {
@@ -141,19 +143,6 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
       unsubscribeMembers();
     };
   }, [tripId]);
-
-  const seedMembers = async () => {
-    // Add all default members from constants
-    const { MEMBERS } = await import('../constants');
-    
-    for (const m of MEMBERS) {
-      const mRef = doc(db, 'trips', tripId, 'members', m.id);
-      const mSnap = await getDoc(mRef);
-      if (!mSnap.exists()) {
-        await setDoc(mRef, m);
-      }
-    }
-  };
 
   const handleClaimIdentity = async (placeholderId: string) => {
     setIsClaiming(true);
@@ -339,16 +328,17 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
   };
 
   const handleAddMember = async () => {
-    const name = prompt("請輸入新成員名稱：");
-    if (!name) return;
+    if (!newMemberName.trim()) return;
     const newId = 'temp_' + Date.now();
     const newMember: Member = {
       id: newId,
-      name,
+      name: newMemberName.trim(),
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newId}`,
       color: 'bg-sky-400'
     };
     await setDoc(doc(db, 'trips', tripId, 'members', newId), newMember);
+    setNewMemberName('');
+    setIsAddMemberModalOpen(false);
   };
 
   const exportToExcel = async () => {
@@ -377,79 +367,18 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
     }
   };
 
+  const getThemeBg = () => {
+    switch (user?.profileTheme) {
+      case 'handdrawn': return 'bg-transparent';
+      case 'hipster': return 'bg-[#FDFCF8]';
+      case 'minimalist': return 'bg-[#F1F5F9]';
+      default: return 'bg-[#FCFBF7]';
+    }
+  };
+
   return (
-    <div className={`h-screen flex flex-col max-w-[390px] mx-auto shadow-2xl relative overflow-hidden transition-colors duration-500 ${
-      user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6] border-x-[1.5px] border-[#4B3F35]/10 font-handdrawn' : 
-      user.profileTheme === 'hipster' ? 'bg-[#FDFCF8] border-x border-stone-100 font-hipster' : 
-      user.profileTheme === 'scrapbook' ? 'bg-[#FDFCF8] paper-texture border-x border-stone-200/50 font-handdrawn' :
-      'bg-[#F8FAFC] font-sans'
-    }`}>
-      {user.profileTheme === 'handdrawn' && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 opacity-20">
-          <div className="absolute top-40 right-4 rotate-12 text-sky-400/30">
-            <Compass size={48} strokeWidth={1.5} />
-          </div>
-          <div className="absolute bottom-60 left-4 -rotate-12 text-amber-400/30">
-            <Plane size={48} strokeWidth={1.5} />
-          </div>
-          <div className="absolute top-1/2 right-2 rotate-[-15deg] text-rose-400/30">
-            <Tent size={36} strokeWidth={1.5} />
-          </div>
-          <div className="absolute top-60 left-2 rotate-[20deg] text-emerald-400/30">
-            <Ticket size={32} strokeWidth={1.5} />
-          </div>
-          <div className="absolute bottom-20 left-10 rotate-[-10deg] text-indigo-400/30">
-            <Camera size={40} strokeWidth={1.5} />
-          </div>
-          <div className="absolute top-20 left-1/3 rotate-12 text-violet-400/20">
-            <Sparkles size={32} strokeWidth={1.5} />
-          </div>
-        </div>
-      )}
-      {user.profileTheme === 'hipster' && (
-        <>
-          <div className="absolute top-24 right-6 text-stone-200/40 rotate-12 pointer-events-none z-0">
-            <span className="text-4xl opacity-50">🍃</span>
-          </div>
-          <div className="absolute bottom-60 left-4 text-stone-200/30 -rotate-12 pointer-events-none z-0">
-            <span className="text-3xl opacity-40">🌿</span>
-          </div>
-          <div className="absolute top-1/2 left-4 text-stone-200/20 rotate-[-15deg] pointer-events-none z-0">
-            <Sparkles size={32} />
-          </div>
-          <div className="absolute bottom-20 right-10 text-stone-200/30 rotate-6 pointer-events-none z-0">
-            <Footprints size={40} className="rotate-[-20deg]" />
-          </div>
-          <div className="absolute top-40 left-6 text-stone-200/20 rotate-[20deg] pointer-events-none z-0">
-            <Camera size={28} />
-          </div>
-        </>
-      )}
-      {user.profileTheme === 'scrapbook' && (
-        <>
-          <div className="absolute top-20 right-4 text-stone-200/40 rotate-12 pointer-events-none z-0">
-            <span className="text-4xl">🍃</span>
-          </div>
-          <div className="absolute bottom-40 left-4 text-stone-200/30 -rotate-12 pointer-events-none z-0">
-            <span className="text-3xl">🌿</span>
-          </div>
-          <div className="absolute top-1/2 right-2 text-stone-200/20 rotate-[-15deg] pointer-events-none z-0">
-            <span className="text-5xl">🎨</span>
-          </div>
-          <div className="absolute bottom-20 right-10 text-stone-200/30 rotate-6 pointer-events-none z-0">
-            <span className="text-2xl">✨</span>
-          </div>
-          <div className="absolute top-40 left-2 text-stone-200/20 rotate-[20deg] pointer-events-none z-0">
-            <span className="text-4xl">🌸</span>
-          </div>
-          <div className="absolute bottom-10 left-10 text-stone-200/25 rotate-[-10deg] pointer-events-none z-0">
-            <span className="text-3xl">📷</span>
-          </div>
-          <svg className="absolute top-[15%] left-0 w-full h-20 text-stone-200/20 pointer-events-none z-0" viewBox="0 0 400 100" preserveAspectRatio="none">
-            <path d="M0,50 Q100,20 200,50 T400,50" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="5,5" />
-          </svg>
-        </>
-      )}
+    <div className={`h-full flex flex-col w-full max-w-md mx-auto relative overflow-hidden transition-colors duration-500 ${getThemeBg()}`}>
+      {/* Background doodles are handled by App.tsx */}
       {/* Header */}
       <div className={`px-6 pt-6 pb-4 shrink-0 flex flex-col gap-4 relative z-30 backdrop-blur-sm ${
         user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6]/80 border-b border-[#4B3F35]/20' : 
@@ -521,13 +450,15 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
               </h1>
             )}
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-normal ${
-                user.profileTheme === 'handdrawn' ? 'bg-[#4B3F35] text-white' : 
-                user.profileTheme === 'scrapbook' ? 'bg-[#8B5E3C] text-white shadow-sm' :
-                'text-white'
-              }`} style={(!['handdrawn', 'scrapbook'].includes(user.profileTheme || '')) ? { backgroundColor: 'var(--brand-color)' } : {}}>
-                {trip?.subtitle || '時光膠囊'}
-              </span>
+              {trip?.subtitle && (
+                <span className={`text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-normal ${
+                  user.profileTheme === 'handdrawn' ? 'bg-[#4B3F35] text-white' : 
+                  user.profileTheme === 'scrapbook' ? 'bg-[#8B5E3C] text-white shadow-sm' :
+                  'text-white'
+                }`} style={(!['handdrawn', 'scrapbook'].includes(user.profileTheme || '')) ? { backgroundColor: 'var(--brand-color)' } : {}}>
+                  {trip.subtitle}
+                </span>
+              )}
               <div className={`text-[11px] font-black tracking-normal ${
                 user.profileTheme === 'handdrawn' ? 'text-[#8B5E3C]' : 
                 user.profileTheme === 'scrapbook' ? 'text-stone-400' :
@@ -557,7 +488,7 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-hidden relative bg-transparent">
+      <main className="flex-1 min-h-0 overflow-hidden relative bg-transparent flex flex-col">
         {/* Migration Banner */}
         {hasLegacyData && (
           <div className="absolute top-4 left-6 right-6 z-50">
@@ -596,7 +527,7 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="h-full"
+            className="flex-1 min-h-0 flex flex-col overflow-hidden"
           >
             {renderContent()}
           </motion.div>
@@ -787,12 +718,12 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
                       />
                     </div>
                     <div className={`${user.profileTheme === 'handdrawn' ? 'p-3' : 'bg-slate-50 p-3 rounded-2xl border border-slate-100'}`}>
-                      <label className="text-[8px] font-black text-slate-300 uppercase mb-1 block">目的地城市</label>
+                      <label className="text-[8px] font-black text-slate-300 uppercase mb-1 block">目的地城市 (以+分隔)</label>
                       <input 
                         type="text" 
                         value={editCity} 
                         onChange={(e) => handleUpdateTripInfo('city', e.target.value)}
-                        placeholder="例如：首爾"
+                        placeholder="例如：首爾+釜山"
                         className="w-full bg-transparent border-none outline-none font-bold text-slate-700 text-sm"
                       />
                     </div>
@@ -835,7 +766,10 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 block">成員名單</label>
-                    <button onClick={handleAddMember} className="text-[10px] font-black text-sky-500 uppercase tracking-widest flex items-center gap-1">
+                    <button 
+                      onClick={() => setIsAddMemberModalOpen(true)} 
+                      className="text-[10px] font-black text-sky-500 uppercase tracking-widest flex items-center gap-1"
+                    >
                       <UserPlus size={12} /> 新增成員
                     </button>
                   </div>
@@ -856,12 +790,121 @@ export const TripView: React.FC<TripViewProps> = ({ tripId, user, onBack }) => {
                 </div>
               </div>
 
-              <button 
-                onClick={() => setIsSettingsOpen(false)}
-                className="w-full mt-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
-              >
-                完成設定
-              </button>
+              <div className="mt-10 flex flex-col gap-3">
+                <button 
+                  onClick={() => setIsDeleteTripModalOpen(true)}
+                  className="w-full py-4 bg-rose-50 text-rose-500 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={18} /> 刪除旅程
+                </button>
+                <button 
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
+                >
+                  完成設定
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Member Modal */}
+      <AnimatePresence>
+        {isAddMemberModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAddMemberModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xs bg-white rounded-[32px] p-8 shadow-2xl"
+            >
+              <h3 className="text-xl font-black text-slate-800 mb-6 font-sans">新增成員 ✨</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 mb-1 block">成員名稱</label>
+                  <input 
+                    type="text" 
+                    value={newMemberName}
+                    onChange={(e) => setNewMemberName(e.target.value)}
+                    placeholder="請輸入成員名稱"
+                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-sky-500/20 transition-all font-sans"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button 
+                    onClick={() => setIsAddMemberModalOpen(false)}
+                    className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs active:scale-95 transition-all"
+                  >
+                    取消
+                  </button>
+                  <button 
+                    onClick={handleAddMember}
+                    className="flex-1 py-4 bg-sky-500 text-white rounded-2xl font-black text-xs shadow-lg shadow-sky-100 active:scale-95 transition-all"
+                  >
+                    加入
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {isDeleteTripModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteTripModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xs bg-white rounded-[32px] p-8 shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500">
+                <Trash2 size={32} />
+              </div>
+              <h3 className="text-xl font-black text-slate-800 mb-2 font-sans">刪除旅程？</h3>
+              <p className="text-slate-400 text-xs font-bold mb-8 leading-relaxed font-sans">
+                確定要刪除旅程嗎？此動作無法復原，所有資料將會消失。
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsDeleteTripModalOpen(false)}
+                  className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-500 text-xs font-black active:scale-95 transition-all"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={async () => {
+                    try {
+                      await deleteDoc(doc(db, 'trips', tripId));
+                      navigate('/');
+                    } catch (err) {
+                      console.error("Delete failed:", err);
+                      alert("刪除失敗");
+                    }
+                  }}
+                  className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-100 active:scale-95 transition-all"
+                >
+                  確定刪除
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

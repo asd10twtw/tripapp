@@ -35,6 +35,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
       const tripData = {
         name: newTripName,
         city: newTripCity,
+        subtitle: "", // Default to empty as requested
         startDate,
         endDate,
         coverImage: `https://picsum.photos/seed/${newTripName}/800/400`,
@@ -80,9 +81,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
   };
 
   const today = new Date().toISOString().split('T')[0];
-  const plannedTrips = filteredTrips.filter(t => t.endDate >= today);
+  const plannedTrips = filteredTrips
+    .filter(t => t.endDate >= today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
   const completedTrips = filteredTrips.filter(t => t.endDate < today);
-  const nextTrip = plannedTrips.length > 0 ? plannedTrips.sort((a, b) => a.startDate.localeCompare(b.startDate))[0] : null;
+  const nextTrip = plannedTrips.length > 0 ? plannedTrips[0] : null;
 
   const daysUntilNextTrip = nextTrip ? Math.ceil((new Date(nextTrip.startDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
@@ -90,14 +93,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
     switch (user.profileTheme) {
       case 'handdrawn':
         return {
-          container: 'bg-[#F9F5E6]',
+          container: 'bg-transparent',
           font: 'font-handdrawn',
           accent: 'text-[#8B5E3C]',
           card: 'bg-white border-[1.5px] border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.03)]',
         };
       case 'scrapbook':
         return {
-          container: 'bg-[#FDFCF8] paper-texture',
+          container: 'bg-transparent paper-texture',
           font: 'font-handdrawn',
           accent: 'text-stone-500',
           card: 'bg-white border border-stone-200/60 shadow-sm',
@@ -141,6 +144,76 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
   const TripCard: React.FC<{ trip: Trip, index: number, theme?: string, isCompact?: boolean }> = ({ trip, index, theme, isCompact }) => {
     const currentTheme = theme || user.profileTheme;
     
+    if (currentTheme === 'handdrawn' || currentTheme === 'scrapbook') {
+      const tapeColors = ['bg-amber-200/80', 'bg-rose-200/80', 'bg-sky-200/80', 'bg-emerald-200/80'];
+      const tapeRotations = ['rotate-[-45deg]', 'rotate-[45deg]', 'rotate-[45deg]', 'rotate-[-45deg]'];
+      
+      return (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: index * 0.1 }}
+          onClick={() => onSelectTrip(trip.id)}
+          className="relative group cursor-pointer active:scale-[0.98] transition-all p-3"
+        >
+          <div className="relative">
+            {/* Main Card Container */}
+            <div className="relative aspect-[16/9] overflow-hidden rounded-sm border-[6px] border-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-white">
+              <img 
+                src={trip.coverImage} 
+                alt={trip.name} 
+                className="w-full h-full object-cover grayscale-[0.1] contrast-[1.05] group-hover:scale-110 transition-transform duration-1000" 
+              />
+              
+              {/* Overlay Gradient */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
+              
+              {/* Content Overlays */}
+              <div className="absolute bottom-4 left-5 right-5 text-white">
+                <h3 className="text-xl font-black font-handdrawn leading-tight mb-2 tracking-wider drop-shadow-md">
+                  {trip.name.toUpperCase()}
+                </h3>
+                <div className="flex items-center gap-4 text-[10px] font-bold font-handdrawn opacity-90">
+                  <span className="flex items-center gap-1.5 drop-shadow-sm">
+                    <Calendar size={12} /> {trip.startDate.replace(/-/g, '.')}
+                  </span>
+                  {trip.city && (
+                    <span className="flex items-center gap-1.5 drop-shadow-sm">
+                      <MapPin size={12} /> {trip.city}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Delete button in circle at bottom right */}
+              <button 
+                onClick={(e) => handleDeleteTrip(e, trip.id, trip.name)}
+                className="absolute bottom-4 right-4 p-2.5 bg-black/40 backdrop-blur-md rounded-full text-white/90 hover:bg-rose-500 hover:text-white transition-all scale-90"
+              >
+                <Trash2 size={16} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Washi Tapes at corners - only for the closest upcoming trip */}
+            {index === 0 && !isCompact && (
+              <>
+                <div className={`absolute top-0 left-0 w-12 h-5 washi-tape-grid ${tapeColors[0]} ${tapeRotations[0]} z-20 border-x border-black/5 opacity-90 -translate-x-3 -translate-y-1`} />
+                <div className={`absolute top-0 right-0 w-12 h-5 washi-tape-grid ${tapeColors[1]} ${tapeRotations[1]} z-20 border-x border-black/5 opacity-90 translate-x-3 -translate-y-1`} />
+                <div className={`absolute bottom-0 left-0 w-12 h-5 washi-tape-grid ${tapeColors[2]} ${tapeRotations[2]} z-20 border-x border-black/5 opacity-90 -translate-x-3 translate-y-1`} />
+                <div className={`absolute bottom-0 right-0 w-12 h-5 washi-tape-grid ${tapeColors[3]} ${tapeRotations[3]} z-20 border-x border-black/5 opacity-90 translate-x-3 translate-y-1`} />
+              </>
+            )}
+          </div>
+          
+          {/* Handdrawn text doodles below card */}
+          <div className="mt-4 flex justify-between px-2 text-[10px] font-handdrawn text-stone-500 opacity-60 italic">
+            <span>✎ {trip.subtitle || '與朋友們一起'}</span>
+            <span>⊹</span>
+          </div>
+        </motion.div>
+      );
+    }
+
     if (currentTheme === 'hipster') {
       return (
         <motion.div
@@ -155,7 +228,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
             <div className="absolute inset-0 ring-1 ring-inset ring-black/5" />
           </div>
           <div className="space-y-1">
-            <h3 className={`text-stone-700 font-hipster leading-tight truncate ${isCompact ? 'text-xs' : 'text-base'}`}>{trip.name}</h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className={`text-stone-700 font-hipster leading-tight truncate ${isCompact ? 'text-xs' : 'text-base'}`}>{trip.name}</h3>
+              <button 
+                onClick={(e) => handleDeleteTrip(e, trip.id, trip.name)}
+                className="p-1 text-stone-300 hover:text-rose-400 transition-colors"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
             <div className="flex items-center gap-2 text-[9px] font-hipster text-stone-400">
               <span className="tracking-widest uppercase">{trip.startDate.replace(/-/g, '.')}</span>
               {trip.city && <span className="opacity-50">/</span>}
@@ -177,12 +258,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         <div className="h-44 relative overflow-hidden">
           <img src={trip.coverImage} alt={trip.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-          <div className="absolute bottom-4 left-5 right-5">
-            <h3 className="text-base font-black text-white leading-tight mb-1">{formatHanddrawnText(trip.name)}</h3>
-            <div className="flex items-center gap-3 text-white/80 text-[9px] font-bold">
-              <span className="flex items-center gap-1"><Calendar size={10} /> {trip.startDate.replace(/-/g, '.')}</span>
-              {trip.city && <span className="flex items-center gap-1"><MapPin size={10} /> {trip.city}</span>}
+          <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-black text-white leading-tight mb-1">{formatHanddrawnText(trip.name)}</h3>
+              <div className="flex items-center gap-3 text-white/80 text-[9px] font-bold">
+                <span className="flex items-center gap-1"><Calendar size={10} /> {trip.startDate.replace(/-/g, '.')}</span>
+                {trip.city && <span className="flex items-center gap-1"><MapPin size={10} /> {trip.city}</span>}
+              </div>
             </div>
+            <button 
+              onClick={(e) => handleDeleteTrip(e, trip.id, trip.name)}
+              className="p-2 bg-black/20 backdrop-blur-md rounded-full text-white/70 hover:text-white transition-all ml-2"
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
         </div>
       </motion.div>
@@ -190,7 +279,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
   };
 
   return (
-    <div className={`flex-1 overflow-y-auto no-scrollbar ${styles.container} ${styles.font} relative`}>
+    <div className={`flex-1 min-h-0 overflow-y-auto no-scrollbar ${styles.container} ${styles.font} relative`}>
       {/* Universal Header (Top Row) */}
       <div className="px-6 pt-12 pb-8 flex justify-between items-center relative z-10">
         <div className="space-y-1">
@@ -223,37 +312,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         </div>
       </div>
 
-      {user.profileTheme === 'handdrawn' && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 opacity-20">
-          <div className="absolute top-[15%] right-[5%] rotate-[-12deg] text-[#3D74B6]">
-            <Compass size={64} strokeWidth={1.5} />
-          </div>
-          <div className="absolute top-[45%] right-[8%] rotate-[15deg] text-rose-500">
-            <Heart size={48} strokeWidth={1.5} fill="currentColor" />
-          </div>
-          <div className="absolute bottom-[25%] left-[5%] rotate-[-15deg] text-amber-500">
-            <Plane size={60} strokeWidth={1.5} />
-          </div>
-          <div className="absolute top-[28%] left-[8%] rotate-[12deg] text-emerald-500">
-            <Tent size={56} strokeWidth={1.5} />
-          </div>
-          <div className="absolute bottom-[40%] right-[15%] rotate-[-8deg] text-indigo-500">
-            <Camera size={52} strokeWidth={1.5} />
-          </div>
-          <div className="absolute top-[60%] left-[12%] rotate-[-20deg] text-orange-500">
-            <Sparkles size={48} strokeWidth={1.5} />
-          </div>
-          <div className="absolute bottom-[10%] right-[25%] rotate-[10deg] text-sky-500">
-            <Ticket size={44} strokeWidth={1.5} />
-          </div>
-          <div className="absolute top-[10%] left-[20%] rotate-[10deg] text-rose-300">
-            <Star size={40} strokeWidth={1.5} fill="currentColor" />
-          </div>
-          <div className="absolute bottom-[5%] left-[30%] rotate-[-5deg] text-green-400">
-            <Footprints size={44} strokeWidth={1.5} />
-          </div>
-        </div>
-      )}
+      {/* Search and list section removed the absolute doodle block */}
       {user.profileTheme === 'hipster' ? (
         <div className="px-6 pb-32 space-y-10 relative z-10">
           {/* Search Bar */}
@@ -405,7 +464,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
       {/* Create Trip Modal */}
       <AnimatePresence>
         {isCreateModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -438,12 +497,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">目的地城市</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">目的地城市 (以+分隔)</label>
                     <input 
                       type="text" 
                       value={newTripCity}
                       onChange={(e) => setNewTripCity(e.target.value)}
-                      placeholder="例如：首爾"
+                      placeholder="例如：首爾+釜山"
                       className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent' : 'rounded-xl bg-slate-50 border-none'}`}
                       style={{ outline: 'none' }}
                       onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}

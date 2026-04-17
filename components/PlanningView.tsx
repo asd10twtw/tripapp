@@ -114,13 +114,33 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
   };
 
   return (
-    <div className="h-full flex flex-col p-6 overflow-y-auto no-scrollbar bg-transparent">
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex-1 min-h-0 flex flex-col p-6 overflow-hidden bg-transparent">
+      <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--brand-color)', opacity: 0.1 }}>
-            <ShoppingBasket size={20} style={{ color: 'var(--brand-color)' }} />
+          <div className={`w-10 h-10 flex items-center justify-center ${theme !== 'handdrawn' && theme !== 'scrapbook' && theme !== 'hipster' ? 'rounded-xl' : ''}`} style={theme !== 'handdrawn' && theme !== 'scrapbook' && theme !== 'hipster' ? { backgroundColor: 'var(--brand-color)', opacity: 0.1 } : {}}>
+            {theme === 'handdrawn' || theme === 'scrapbook' ? (
+              <div className="w-12 h-12">
+                <img 
+                  src="/s1.png" 
+                  className="w-full h-full object-contain" 
+                  alt="Shopping"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            ) : theme === 'hipster' ? (
+              <div className="w-12 h-12">
+                <img 
+                  src="/s2.png" 
+                  className="w-full h-full object-contain" 
+                  alt="Shopping"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            ) : (
+              <ShoppingBasket size={20} style={{ color: 'var(--brand-color)' }} />
+            )}
           </div>
-          <h2 className="text-xl font-black text-slate-800 tracking-tight">購物清單</h2>
+          <h2 className={`text-xl font-black tracking-tight ${(theme === 'handdrawn' || theme === 'scrapbook') ? 'text-stone-700' : theme === 'hipster' ? 'text-stone-800 font-hipster uppercase tracking-widest' : 'text-slate-800'}`}>購物清單</h2>
         </div>
         <button 
           onClick={() => setShowAddModal(true)}
@@ -131,7 +151,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
         </button>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6 shrink-0">
         <label className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] ml-2 mb-3 block">是誰想買？</label>
         <div className="flex gap-3 overflow-x-auto no-scrollbar py-1 px-1">
           {members.map(m => (
@@ -152,13 +172,13 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
         </div>
       </div>
 
-      <div className={`flex-1 backdrop-blur-sm p-6 flex flex-col ${
+      <div className={`flex-1 min-h-0 backdrop-blur-sm p-6 flex flex-col ${
         theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.05)]' : 
         'bg-white/80 rounded-[32px] shadow-soft border border-slate-50'
       }`}>
-        <h3 className="text-base font-black text-slate-800 mb-4">{activeMember?.name} 的願望</h3>
+        <h3 className="text-base font-black text-slate-800 mb-4 shrink-0">{activeMember?.name} 的願望</h3>
         
-        <div className="space-y-3 overflow-y-auto no-scrollbar pb-10">
+        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-3 pb-10">
           {filteredTodos.map(item => (
             <div 
               key={item.id} 

@@ -86,12 +86,32 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, theme
   }
 
   return (
-    <div className="h-full flex flex-col p-6 overflow-y-auto no-scrollbar journal-container bg-transparent">
+    <div className="flex-1 min-h-0 flex flex-col p-6 overflow-y-auto no-scrollbar journal-container bg-transparent">
       <div className="flex items-center gap-2 mb-6">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--brand-color)', opacity: 0.1 }}>
-          <PenTool size={20} style={{ color: 'var(--brand-color)' }} />
+        <div className={`w-10 h-10 flex items-center justify-center shrink-0 ${theme !== 'handdrawn' && theme !== 'scrapbook' && theme !== 'hipster' ? 'rounded-xl' : ''}`} style={theme !== 'handdrawn' && theme !== 'scrapbook' && theme !== 'hipster' ? { backgroundColor: 'var(--brand-color)', opacity: 0.1 } : {}}>
+          {theme === 'handdrawn' || theme === 'scrapbook' ? (
+            <div className="w-12 h-12">
+               <img 
+                 src="/a1.png" 
+                 className="w-full h-full object-contain" 
+                 alt="Journal"
+                 referrerPolicy="no-referrer"
+               />
+            </div>
+          ) : theme === 'hipster' ? (
+            <div className="w-12 h-12">
+               <img 
+                 src="/a2.png" 
+                 className="w-full h-full object-contain" 
+                 alt="Journal"
+                 referrerPolicy="no-referrer"
+               />
+            </div>
+          ) : (
+            <PenTool size={20} style={{ color: 'var(--brand-color)' }} />
+          )}
         </div>
-        <h2 className="text-xl font-black text-slate-800 tracking-tight">旅行日誌</h2>
+        <h2 className={`text-xl font-black tracking-tight ${(theme === 'handdrawn' || theme === 'scrapbook') ? 'text-stone-700' : theme === 'hipster' ? 'text-stone-800 font-hipster uppercase tracking-widest' : 'text-slate-800'}`}>旅行日誌</h2>
       </div>
 
       <div className="mb-6">
