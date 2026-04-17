@@ -77,7 +77,8 @@ export interface Expense {
   id: string;
   amountKRW: number;
   amountTWD: number;
-  currency: 'KRW' | 'TWD'; // Track original input currency
+  amountJPY?: number;
+  currency: 'KRW' | 'TWD' | 'JPY'; // Track original input currency
   category: string;
   description: string;
   payerId: string;

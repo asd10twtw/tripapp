@@ -67,6 +67,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
         const spendingResults = await Promise.all(trips.map(async (trip) => {
           let tripTotalShare = 0;
           
+          // Only count spending for completed trips
+          const isCompleted = new Date(trip.endDate) < new Date();
+          if (!isCompleted) return 0;
+
           // Fetch the latest exchange rate from trip settings (same as ExpenseView)
           const settingsSnap = await getDoc(doc(db, 'trips', trip.id, 'config', 'settings'));
           const exchangeRateNum = settingsSnap.exists() ? Number(settingsSnap.data().exchangeRate || 0.0245) : 0.0245;
@@ -373,19 +377,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
               <div className="absolute top-4 right-6 text-rose-400 rotate-12 opacity-60"><Heart size={22} fill="currentColor" /></div>
               <div className="absolute bottom-6 right-8 text-sky-400 rotate-6 opacity-60"><Sparkles size={20} /></div>
               
-              {/* Vertical Map Route Doodle - Bottom to Top zig-zag */}
+              {/* Horizontal Map Route Doodle - Left to Right zig-zag */}
               <div className="absolute inset-0 pointer-events-none opacity-20 overflow-hidden">
-                <svg className="w-full h-full" viewBox="0 0 400 300" preserveAspectRatio="none" fill="none">
+                <svg className="w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="none" fill="none">
                   <path 
-                    d="M100,280 C150,230 50,180 120,130 S180,80 130,20" 
+                    d="M30,160 C100,160 150,40 200,40 S300,140 370,140" 
                     stroke="#8B5E3C" 
                     strokeWidth="2.5" 
                     strokeDasharray="6 6" 
                     strokeLinecap="round"
                     className="opacity-40"
                   />
-                  <circle cx="100" cy="280" r="3.5" fill="#8B5E3C" />
-                  <circle cx="130" cy="20" r="3.5" fill="#8B5E3C" />
+                  <circle cx="30" cy="160" r="3.5" fill="#8B5E3C" />
+                  <circle cx="370" cy="140" r="3.5" fill="#8B5E3C" />
                 </svg>
               </div>
             </>

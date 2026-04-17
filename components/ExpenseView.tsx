@@ -20,6 +20,8 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
   
   const [exchangeRate, setExchangeRate] = useState<number>(0.0245);
   const [localRateStr, setLocalRateStr] = useState<string>('0.0245');
+  const [jpyRate, setJpyRate] = useState<number>(0.21);
+  const [jpyRateStr, setJpyRateStr] = useState<string>('0.21');
 
   const [viewingMemberDetailsId, setViewingMemberDetailsId] = useState<string | null>(null);
 
@@ -34,7 +36,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [amountInput, setAmountInput] = useState('');
-  const [inputCurrency, setInputCurrency] = useState<'KRW' | 'TWD'>('KRW');
+  const [inputCurrency, setInputCurrency] = useState<'KRW' | 'TWD' | 'JPY'>('KRW');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [category, setCategory] = useState<string>(EventCategory.FOOD);
@@ -57,12 +59,18 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
         const data = docSnap.data();
         if (data.exchangeRate !== undefined) {
           setExchangeRate(data.exchangeRate);
-          // Only update the input string if the value is significantly different
-          // This prevents overwriting user input like "0." or "0.00" while typing
           setLocalRateStr(prev => {
              const currentNum = parseFloat(prev);
              if (!isNaN(currentNum) && Math.abs(currentNum - data.exchangeRate) < 0.000001) return prev;
              return data.exchangeRate.toString();
+          });
+        }
+        if (data.jpyRate !== undefined) {
+          setJpyRate(data.jpyRate);
+          setJpyRateStr(prev => {
+             const currentNum = parseFloat(prev);
+             if (!isNaN(currentNum) && Math.abs(currentNum - data.jpyRate) < 0.000001) return prev;
+             return data.jpyRate.toString();
           });
         }
         if (data.customCategories) setCustomCategories(data.customCategories);
@@ -76,8 +84,16 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
     const rate = parseFloat(newVal);
     if (!isNaN(rate)) {
         setExchangeRate(rate);
-        // Persist to Firestore
         await setDoc(doc(db, 'trips', tripId, 'config', 'settings'), { exchangeRate: rate }, { merge: true });
+    }
+  };
+
+  const handleJpyRateChange = async (newVal: string) => {
+    setJpyRateStr(newVal);
+    const rate = parseFloat(newVal);
+    if (!isNaN(rate)) {
+        setJpyRate(rate);
+        await setDoc(doc(db, 'trips', tripId, 'config', 'settings'), { jpyRate: rate }, { merge: true });
     }
   };
 
@@ -153,20 +169,28 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
       }
     }
 
-    let amountKRW = 0, amountTWD = 0;
+    let amountKRW = 0, amountTWD = 0, amountJPY = 0;
     const safeRate = exchangeRate || 0.0245;
+    const safeJpyRate = jpyRate || 0.21;
 
     if (inputCurrency === 'KRW') {
         amountKRW = Math.round(inputTotal);
         amountTWD = Math.round(inputTotal * safeRate);
+        amountJPY = Math.round(amountTWD / safeJpyRate);
+    } else if (inputCurrency === 'JPY') {
+        amountJPY = Math.round(inputTotal);
+        amountTWD = Math.round(inputTotal * safeJpyRate);
+        amountKRW = Math.round(amountTWD / safeRate);
     } else {
         amountTWD = Math.round(inputTotal);
         amountKRW = Math.round(inputTotal / safeRate);
+        amountJPY = Math.round(inputTotal / safeJpyRate);
     }
     
     const data: any = { 
       amountKRW, 
       amountTWD, 
+      amountJPY,
       currency: inputCurrency, 
       category, 
       description: description.trim(), 
@@ -214,7 +238,11 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
     members.forEach(m => { memberPaid[m.id] = 0; memberShare[m.id] = 0; });
     
     expenses.forEach(exp => {
-        const currentTWD = exp.currency === 'KRW' ? Math.round(exp.amountKRW * exchangeRate) : exp.amountTWD;
+        let currentTWD = 0;
+        if (exp.currency === 'KRW') currentTWD = Math.round(exp.amountKRW * exchangeRate);
+        else if (exp.currency === 'JPY') currentTWD = Math.round((exp.amountJPY || 0) * jpyRate);
+        else currentTWD = exp.amountTWD;
+
         if (memberPaid[exp.payerId] !== undefined) {
            memberPaid[exp.payerId] += currentTWD;
         }
@@ -222,7 +250,10 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
         if (exp.customSplits && Object.keys(exp.customSplits).length > 0) {
           (Object.entries(exp.customSplits) as [string, number][]).forEach(([id, amt]) => {
             if (memberShare[id] !== undefined) {
-              const shareTWD = exp.currency === 'KRW' ? amt * exchangeRate : amt;
+              let shareTWD = 0;
+              if (exp.currency === 'KRW') shareTWD = amt * exchangeRate;
+              else if (exp.currency === 'JPY') shareTWD = amt * jpyRate;
+              else shareTWD = amt;
               memberShare[id] += shareTWD;
             }
           });
@@ -266,10 +297,15 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
       const splitIds = exp.splitWithIds || [];
       if (splitIds.includes(currentUser.uid)) {
         let myShare = 0;
-        const currentTWD = exp.currency === 'KRW' ? Math.round(exp.amountKRW * exchangeRate) : exp.amountTWD;
+        let currentTWD = 0;
+        if (exp.currency === 'KRW') currentTWD = Math.round(exp.amountKRW * exchangeRate);
+        else if (exp.currency === 'JPY') currentTWD = Math.round((exp.amountJPY || 0) * jpyRate);
+        else currentTWD = exp.amountTWD;
         
         if (exp.customSplits && exp.customSplits[currentUser.uid] !== undefined) {
-          myShare = exp.currency === 'KRW' ? exp.customSplits[currentUser.uid] * exchangeRate : exp.customSplits[currentUser.uid];
+          if (exp.currency === 'KRW') myShare = exp.customSplits[currentUser.uid] * exchangeRate;
+          else if (exp.currency === 'JPY') myShare = exp.customSplits[currentUser.uid] * jpyRate;
+          else myShare = exp.customSplits[currentUser.uid];
         } else {
           myShare = splitIds.length > 0 ? currentTWD / splitIds.length : 0;
         }
@@ -382,7 +418,11 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                     <div className="space-y-3">
                     {expensesByDate[date].map((exp, idx) => {
                       const payerM = members.find(m => m.id === exp.payerId);
-                      const currentTWD = exp.currency === 'KRW' ? Math.round(exp.amountKRW * exchangeRate) : exp.amountTWD;
+                      let currentTWD = 0;
+                      if (exp.currency === 'KRW') currentTWD = Math.round(exp.amountKRW * exchangeRate);
+                      else if (exp.currency === 'JPY') currentTWD = Math.round((exp.amountJPY || 0) * jpyRate);
+                      else currentTWD = exp.amountTWD;
+
                       const splitMembers = members.filter(m => (exp.splitWithIds || []).includes(m.id));
                       return (
                           <div key={exp.id} onClick={() => openEditModal(exp)} className={`py-4 px-4 flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all relative ${
@@ -415,7 +455,9 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                                     <Clock size={9} /> {exp.time || '--:--'}
                                   </div>
                                   <div className={`text-sm font-black tracking-tight leading-none mb-1 ${theme === 'scrapbook' ? 'text-stone-800' : 'text-slate-900'}`}>NT$ {currentTWD.toLocaleString()}</div>
-                                  <div className={`text-[10px] font-black uppercase tracking-tighter leading-none ${theme === 'scrapbook' ? 'text-stone-400' : ''}`} style={theme !== 'scrapbook' ? { color: 'var(--brand-color)' } : {}}>₩{exp.amountKRW.toLocaleString()}</div>
+                                  <div className={`text-[10px] font-black uppercase tracking-tighter leading-none ${theme === 'scrapbook' ? 'text-stone-400' : ''}`} style={theme !== 'scrapbook' ? { color: 'var(--brand-color)' } : {}}>
+                                    {exp.currency === 'KRW' ? `₩${exp.amountKRW.toLocaleString()}` : exp.currency === 'JPY' ? `¥${exp.amountJPY?.toLocaleString()}` : `NT$ ${exp.amountTWD.toLocaleString()}`}
+                                  </div>
                               </div>
                           </div>
                           {exp.notes && (
@@ -440,8 +482,8 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-24 pt-4 space-y-6 no-scrollbar">
-            <div className="bg-sky-50 rounded-2xl p-5 border border-sky-100 shadow-soft">
-                <div className="flex justify-between items-center mb-4 gap-2">
+            <div className="bg-sky-50 rounded-2xl p-5 border border-sky-100 shadow-soft space-y-4">
+                <div className="flex justify-between items-center gap-2">
                    <h4 className="text-sky-500 text-[10px] font-black tracking-tight uppercase shrink-0">匯率設定</h4>
                    <a 
                     href="https://rate.bot.com.tw/xrt?Lang=zh-TW" 
@@ -452,12 +494,23 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                      <Landmark size={10} /> 查看台銀牌告 <ExternalLink size={8} />
                    </a>
                 </div>
-                <div className="flex items-center gap-2">
-                   <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0">1 KRW ≈</div>
-                   <div className="flex-1 min-w-0 bg-white border border-sky-400/20 rounded-xl px-2 h-12 flex items-center shadow-sm">
-                      <input type="number" step="0.0001" value={localRateStr} onChange={(e) => handleRateChange(e.target.value)} className="w-full text-center text-lg font-black bg-transparent outline-none" style={{ color: 'var(--brand-color)' }} />
-                   </div>
-                   <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0">TWD</div>
+                
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-16 text-right">1 KRW ≈</div>
+                    <div className="flex-1 min-w-0 bg-white border border-sky-400/20 rounded-xl px-2 h-10 flex items-center shadow-sm">
+                        <input type="number" step="0.0001" value={localRateStr} onChange={(e) => handleRateChange(e.target.value)} className="w-full text-center text-sm font-black bg-transparent outline-none" style={{ color: 'var(--brand-color)' }} />
+                    </div>
+                    <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-8">TWD</div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-16 text-right">1 JPY ≈</div>
+                    <div className="flex-1 min-w-0 bg-white border border-sky-400/20 rounded-xl px-2 h-10 flex items-center shadow-sm">
+                        <input type="number" step="0.0001" value={jpyRateStr} onChange={(e) => handleJpyRateChange(e.target.value)} className="w-full text-center text-sm font-black bg-transparent outline-none" style={{ color: 'var(--brand-color)' }} />
+                    </div>
+                    <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-8">TWD</div>
+                  </div>
                 </div>
             </div>
 
@@ -659,6 +712,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                         <div className="flex-1 min-w-0"><label className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mb-1 block px-1">金額</label><input type="number" value={amountInput} onChange={(e) => setAmountInput(e.target.value)} className="w-full text-2xl font-bold text-slate-800 bg-transparent outline-none" placeholder="0" /></div>
                         <div className="flex bg-white rounded-xl p-1 shadow-xs border border-slate-100 shrink-0">
                              <button onClick={() => setInputCurrency('KRW')} className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${inputCurrency === 'KRW' ? 'bg-sky-400 text-white' : 'text-slate-400'}`}>KRW</button>
+                             <button onClick={() => setInputCurrency('JPY')} className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${inputCurrency === 'JPY' ? 'bg-sky-400 text-white' : 'text-slate-400'}`}>JPY</button>
                              <button onClick={() => setInputCurrency('TWD')} className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${inputCurrency === 'TWD' ? 'bg-sky-400 text-white' : 'text-slate-400'}`}>TWD</button>
                         </div>
                     </div>

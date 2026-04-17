@@ -17,33 +17,33 @@ export const BackgroundDoodles: React.FC<BackgroundDoodlesProps> = ({ user }) =>
         backgroundSize: '24px 24px' 
       }} />
 
-      {/* Spaced out color doodles - No central overlaps or black-and-white icons */}
-      <div className="absolute top-[8%] left-[6%] rotate-[-15deg] text-rose-500 opacity-25">
+      {/* Distributed color doodles - Averaged out across screen space */}
+      <div className="absolute top-[8%] left-[15%] rotate-[-15deg] text-rose-500 opacity-20">
         <Heart size={42} strokeWidth={2.5} fill="currentColor" />
       </div>
-      <div className="absolute top-[12%] right-[8%] rotate-[12deg] text-sky-500 opacity-25">
+      <div className="absolute top-[15%] right-[20%] rotate-[12deg] text-sky-500 opacity-20">
         <Compass size={48} strokeWidth={2.5} />
       </div>
 
-      <div className="absolute top-[28%] left-[10%] rotate-[10deg] text-amber-500 opacity-20">
+      <div className="absolute top-[35%] left-[25%] rotate-[10deg] text-amber-500 opacity-15">
         <Star size={38} strokeWidth={2.5} fill="currentColor" />
       </div>
-      <div className="absolute top-[45%] right-[10%] rotate-[-10deg] text-rose-400 opacity-20">
+      <div className="absolute top-[42%] right-[15%] rotate-[-10deg] text-rose-400 opacity-15">
         <Heart size={40} strokeWidth={2.5} />
       </div>
 
-      <div className="absolute top-[65%] left-[8%] rotate-[-12deg] text-emerald-500 opacity-25">
+      <div className="absolute top-[58%] left-[18%] rotate-[-12deg] text-emerald-500 opacity-20">
         <Footprints size={50} strokeWidth={2.5} />
       </div>
-      <div className="absolute top-[48%] left-[12%] rotate-[-10deg] text-sky-400 opacity-20">
+      <div className="absolute top-[52%] right-[30%] rotate-[-10deg] text-sky-400 opacity-15">
         <Plane size={44} strokeWidth={2.5} />
       </div>
 
-      <div className="absolute bottom-[20%] right-[12%] rotate-[10deg] text-rose-400 opacity-25">
+      <div className="absolute bottom-[25%] right-[20%] rotate-[10deg] text-rose-400 opacity-20">
         <Ticket size={48} strokeWidth={2.5} />
       </div>
 
-      <div className="absolute bottom-[8%] left-[10%] rotate-[15deg] text-amber-600 opacity-25">
+      <div className="absolute bottom-[12%] left-[28%] rotate-[15deg] text-amber-600 opacity-20">
         <Camera size={42} strokeWidth={2.5} />
       </div>
     </div>
