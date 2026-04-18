@@ -4,33 +4,27 @@
   "short_name": "GoGoTrip",
   "description": "旅行手冊 - 您的專屬旅行伴侶",
   "id": "/",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#FCFBF7",
   "theme_color": "#FCFBF7",
   "icons": [
     {
-      "src": "trippic.png",
+      "src": "/trippic.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "trippic.png",
+      "src": "/trippic.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "trippic.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "trippic.png",
+      "src": "/trippic.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

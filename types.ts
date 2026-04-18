@@ -10,6 +10,7 @@ export interface Trip {
   createdAt: string;
   city?: string;
   country?: string;
+  inviteCode?: string;
 }
 
 export interface UserProfile {
