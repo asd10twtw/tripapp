@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { UserProfile } from './types';
+import { MainTab, Trip, UserProfile, Member } from './types';
 import { subscribeToAuth, db } from './services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { TripView } from './components/TripView';
 import { ProfileView } from './components/ProfileView';
 import { BackgroundDoodles } from './components/BackgroundDoodles';
 import { User } from 'firebase/auth';
-import { MainTab, Trip } from './types';
 import { Home, Map as MapIcon, PlusCircle, User as UserIcon, MapPin, Plus, Compass } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, orderBy, onSnapshot, getDocs, limit, addDoc, deleteDoc, arrayUnion, updateDoc } from 'firebase/firestore';
@@ -23,7 +22,11 @@ const App: React.FC = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [joiningTripId, setJoiningTripId] = useState<string | null>(null);
+  const [pendingTrip, setPendingTrip] = useState<Trip | null>(null);
+  const [pendingMembers, setPendingMembers] = useState<Member[]>([]);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [joinStep, setJoinStep] = useState<'confirm' | 'select'>('confirm');
+  const [isJoiningLoading, setIsJoiningLoading] = useState(false);
   const [isFirstLoad, setIsFirstLoad] = useState(() => !sessionStorage.getItem('app_initialized'));
 
   // Handle URL parameters for sharing
@@ -47,74 +50,101 @@ const App: React.FC = () => {
 
   // Check if user needs to join the trip
   useEffect(() => {
-    if (joiningTripId && user && trips.length > 0) {
-      const isMember = trips.some(t => t.id === joiningTripId);
+    if (joiningTripId && user) {
+      const isMember = trips.some(t => t.id === joiningTripId || t.inviteCode?.toUpperCase() === joiningTripId.toUpperCase());
       if (!isMember) {
+        setJoinStep('confirm');
         setShowJoinModal(true);
       } else {
-        // If already a member, just switch to that trip
-        navigate(`/trip/${joiningTripId}`);
-        // Clear param to avoid re-triggering
-        const url = new URL(window.location.href);
-        url.searchParams.delete('tripId');
-        window.history.replaceState({}, '', url.toString());
+        // If already a member, navigate to it
+        const trip = trips.find(t => t.id === joiningTripId || t.inviteCode?.toUpperCase() === joiningTripId.toUpperCase());
+        if (trip) navigate(`/trip/${trip.id}`);
         setJoiningTripId(null);
       }
     }
   }, [joiningTripId, user, trips]);
 
-  const handleJoinTrip = async () => {
+  const fetchPendingTripDetails = async () => {
     if (!joiningTripId || !user) return;
+    setIsJoiningLoading(true);
     try {
       let finalTripId = joiningTripId;
-      let tripRef = doc(db, 'trips', finalTripId);
-      let tripSnap = await getDoc(tripRef);
+      let tripSnap = await getDoc(doc(db, 'trips', finalTripId));
 
-      // If not found by direct ID, check short code or prefix
       if (!tripSnap.exists()) {
-        const shortCodeQuery = query(collection(db, 'trips'), where('inviteCode', '==', joiningTripId.toUpperCase()), limit(1));
-        const shortCodeSnap = await getDocs(shortCodeQuery);
-        
-        if (!shortCodeSnap.empty) {
-          finalTripId = shortCodeSnap.docs[0].id;
-          tripRef = doc(db, 'trips', finalTripId);
-          tripSnap = shortCodeSnap.docs[0];
-        } else {
-          // Try prefix match for 8-char codes
-          const prefixQuery = query(
-            collection(db, 'trips'), 
-            where('__name__', '>=', joiningTripId), 
-            where('__name__', '<', joiningTripId + '\uf8ff'),
-            limit(1)
-          );
-          const prefixSnap = await getDocs(prefixQuery);
-          if (!prefixSnap.empty) {
-            finalTripId = prefixSnap.docs[0].id;
-            tripRef = doc(db, 'trips', finalTripId);
-            tripSnap = prefixSnap.docs[0];
-          }
+        const q = query(collection(db, 'trips'), where('inviteCode', '==', joiningTripId.toUpperCase()), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          finalTripId = snap.docs[0].id;
+          tripSnap = snap.docs[0];
         }
       }
 
       if (tripSnap.exists()) {
-        await updateDoc(tripRef, {
-          memberUids: arrayUnion(user.uid)
-        });
-        navigate(`/trip/${finalTripId}`);
-        setShowJoinModal(false);
-        setJoiningTripId(null);
-        // Clear URL param
-        const url = new URL(window.location.href);
-        url.searchParams.delete('tripId');
-        window.history.replaceState({}, '', url.toString());
+        const tripData = { id: tripSnap.id, ...tripSnap.data() } as Trip;
+        setPendingTrip(tripData);
+        
+        // Fetch members
+        const membersSnap = await getDocs(collection(db, 'trips', finalTripId, 'members'));
+        setPendingMembers(membersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Member)));
+        setJoinStep('select');
       } else {
-        alert("找不到該旅程，可能編號錯誤或已被刪除。");
+        alert("找不到此旅程編號，請再確認一次。");
         setJoiningTripId(null);
         setShowJoinModal(false);
       }
     } catch (err) {
-      console.error("Failed to join trip:", err);
-      alert("加入旅程失敗，請稍後再試。");
+      console.error("Fetch trip error:", err);
+    } finally {
+      setIsJoiningLoading(false);
+    }
+  };
+
+  const handleJoinTripAs = async (memberId?: string) => {
+    if (!pendingTrip || !user) return;
+    
+    try {
+      // 1. Update trip memberUids
+      await updateDoc(doc(db, 'trips', pendingTrip.id), {
+        memberUids: arrayUnion(user.uid)
+      });
+
+      // 2. Handle member record
+      if (memberId && memberId !== 'new') {
+        // Link existing record to this UID
+        const memberRef = doc(db, 'trips', pendingTrip.id, 'members', memberId);
+        const memberSnap = await getDoc(memberRef);
+        if (memberSnap.exists()) {
+          const data = memberSnap.data();
+          // Create new doc with user UID and delete old one if ID changed
+          await setDoc(doc(db, 'trips', pendingTrip.id, 'members', user.uid), {
+            ...data,
+            id: user.uid,
+            name: user.displayName || data.name,
+            avatar: user.photoURL || data.avatar
+          });
+          if (memberId !== user.uid) {
+            await deleteDoc(memberRef);
+          }
+        }
+      } else {
+        // Create new member record
+        await setDoc(doc(db, 'trips', pendingTrip.id, 'members', user.uid), {
+          id: user.uid,
+          name: user.displayName,
+          avatar: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+          color: 'bg-sky-400'
+        });
+      }
+
+      navigate(`/trip/${pendingTrip.id}`);
+      setShowJoinModal(false);
+      setJoiningTripId(null);
+      setPendingTrip(null);
+      setPendingMembers([]);
+    } catch (err) {
+      console.error("Join error:", err);
+      alert("加入失敗，請稍後再試。");
     }
   };
 
@@ -367,35 +397,68 @@ const App: React.FC = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
-              onClick={() => { setShowJoinModal(false); setJoiningTripId(null); }}
+              onClick={() => { if (!isJoiningLoading) { setShowJoinModal(false); setJoiningTripId(null); setPendingTrip(null); } }}
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-xs bg-white rounded-[40px] p-8 shadow-2xl flex flex-col items-center text-center"
+              className="relative w-full max-w-sm bg-white rounded-[40px] p-8 shadow-2xl flex flex-col items-center"
             >
-              <div className="w-20 h-20 bg-sky-50 rounded-full flex items-center justify-center mb-6 text-sky-500">
-                <Compass size={40} />
-              </div>
-              <h3 className="text-xl font-black text-slate-800 mb-2">加入新的旅程？</h3>
-              <p className="text-slate-400 text-xs font-bold mb-8 leading-relaxed">
-                您獲邀加入一個新的旅程！<br/>點擊下方按鈕即可開始與夥伴們同步計畫。
-              </p>
-              <div className="flex w-full gap-3">
-                <button 
-                  onClick={() => { setShowJoinModal(false); setJoiningTripId(null); }}
-                  className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 text-sm font-black active:scale-95 transition-all"
-                >
-                  先不要
-                </button>
-                <button 
-                  onClick={handleJoinTrip}
-                  className="flex-[2] py-4 rounded-2xl bg-sky-500 text-white text-sm font-black shadow-lg shadow-sky-100 active:scale-95 transition-all"
-                >
-                  立刻加入
-                </button>
-              </div>
+              {joinStep === 'confirm' ? (
+                <>
+                  <div className="w-20 h-20 bg-sky-50 rounded-full flex items-center justify-center mb-6 text-sky-500">
+                    <Compass size={40} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-800 mb-2 text-center">加入新的旅程？</h3>
+                  <p className="text-slate-400 text-xs font-bold mb-8 leading-relaxed text-center">
+                    您獲邀加入一個新的旅程！<br/>點擊下方按鈕即可開始與夥伴們同步計畫。
+                  </p>
+                  <div className="flex w-full gap-3">
+                    <button 
+                      onClick={() => { setShowJoinModal(false); setJoiningTripId(null); }}
+                      className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 text-sm font-black active:scale-95 transition-all"
+                    >
+                      先不要
+                    </button>
+                    <button 
+                      onClick={fetchPendingTripDetails}
+                      disabled={isJoiningLoading}
+                      className="flex-[2] py-4 rounded-2xl bg-sky-500 text-white text-sm font-black shadow-lg shadow-sky-100 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {isJoiningLoading ? '讀取中...' : '立刻加入'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="w-full">
+                  <h3 className="text-lg font-black text-slate-800 mb-2">確認您的身份</h3>
+                  <p className="text-slate-400 text-xs font-bold mb-6">請選擇您在旅程中的預設身份，或新增自己為新成員。</p>
+                  
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto no-scrollbar mb-8">
+                    {/* Only show members who aren't already linked to a real user UID (or show all if they want to override) */}
+                    {pendingMembers.map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => handleJoinTripAs(m.id)}
+                        className="w-full flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 hover:border-sky-300 transition-all text-left"
+                      >
+                        <img src={m.avatar} className="w-10 h-10 rounded-full object-cover" />
+                        <span className="text-sm font-black text-slate-700">{m.name}</span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => handleJoinTripAs('new')}
+                      className="w-full flex items-center gap-3 p-3 bg-sky-50 rounded-2xl border border-sky-100 hover:border-sky-300 transition-all text-left"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-sky-500 border border-sky-100">
+                        <Plus size={20} />
+                      </div>
+                      <span className="text-sm font-black text-sky-600">這是新成員（我自己）</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

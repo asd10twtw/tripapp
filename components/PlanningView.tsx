@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { TodoItem, Member } from '../types';
 import { User } from 'firebase/auth';
-import { Check, Plus, ShoppingBasket, Trash2, MapPin, Image as ImageIcon, Camera, X, Loader2 } from 'lucide-react';
+import { Check, Plus, ShoppingBasket, ShoppingBag, Trash2, MapPin, Image as ImageIcon, Camera, X, Loader2 } from 'lucide-react';
 import { db } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, orderBy } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -117,8 +117,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
     <div className="flex-1 min-h-0 flex flex-col p-6 overflow-hidden bg-transparent">
       <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center gap-2">
-          <div className={`w-10 h-10 flex items-center justify-center ${theme !== 'handdrawn' && theme !== 'scrapbook' && theme !== 'hipster' ? 'rounded-xl' : ''}`} style={theme !== 'handdrawn' && theme !== 'scrapbook' && theme !== 'hipster' ? { backgroundColor: 'var(--brand-color)', opacity: 0.1 } : {}}>
-            {theme === 'handdrawn' || theme === 'scrapbook' ? (
+          {theme === 'handdrawn' || theme === 'scrapbook' ? (
+            <div className="flex items-center gap-2">
               <div className="w-12 h-12">
                 <img 
                   src="/s1.png" 
@@ -127,7 +127,10 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                   referrerPolicy="no-referrer"
                 />
               </div>
-            ) : theme === 'hipster' ? (
+              <h2 className="text-xl font-black tracking-tight text-stone-700">購物清單</h2>
+            </div>
+          ) : theme === 'hipster' ? (
+            <div className="flex items-center gap-2">
               <div className="w-12 h-12">
                 <img 
                   src="/s2.png" 
@@ -136,11 +139,16 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                   referrerPolicy="no-referrer"
                 />
               </div>
-            ) : (
-              <ShoppingBasket size={20} style={{ color: 'var(--brand-color)' }} />
-            )}
-          </div>
-          <h2 className={`text-xl font-black tracking-tight ${(theme === 'handdrawn' || theme === 'scrapbook') ? 'text-stone-700' : theme === 'hipster' ? 'text-stone-800 font-hipster uppercase tracking-widest' : 'text-slate-800'}`}>購物清單</h2>
+              <h2 className="text-xl font-black tracking-tight text-stone-800 font-hipster uppercase tracking-widest">購物清單</h2>
+            </div>
+          ) : (
+            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+              <div className="bg-amber-100 p-2 rounded-xl">
+                <ShoppingBag size={20} className="text-amber-500" />
+              </div>
+              購物清單
+            </h2>
+          )}
         </div>
         <button 
           onClick={() => setShowAddModal(true)}
