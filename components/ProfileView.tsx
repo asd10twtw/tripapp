@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { UserProfile, Trip, Expense } from '../types';
-import { Settings, Bell, Moon, LogOut, ChevronRight, Award, Calendar, MapPin, Github, Pencil, X, Image as ImageIcon, Loader2, Check, Scissors, Wallet, Clock, Heart, Star, Sparkles, Compass, Plane, Tent, Ticket, Camera, Footprints } from 'lucide-react';
+import { Settings, Bell, Moon, LogOut, ChevronRight, Award, Calendar, MapPin, Github, Pencil, X, Image as ImageIcon, Loader2, Check, Scissors, Wallet, Clock, Heart, Star, Sparkles, Compass, Plane, Tent, Ticket, Camera, Footprints, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { logout } from '../services/firebase';
 import { doc, updateDoc, collection, getDocs, getDoc } from 'firebase/firestore';
@@ -361,8 +361,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
   const topCity = sortedCities.length > 0 ? sortedCities[0][0] : "尚未設定";
 
   return (
-    <div className={`flex-1 min-h-0 overflow-y-auto no-scrollbar pb-32 pt-12 relative ${styles.container} ${styles.font}`}>
-      <div className="px-6 pt-12 pb-6">
+    <div className={`flex-1 min-h-0 overflow-y-auto no-scrollbar pb-32 pt-4 relative ${styles.container} ${styles.font}`}>
+      <div className="px-6 pt-4 pb-6">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -389,7 +389,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                     className="opacity-40"
                   />
                   <circle cx="30" cy="160" r="3.5" fill="#8B5E3C" />
-                  <circle cx="370" cy="140" r="3.5" fill="#8B5E3C" />
+                  <g transform="translate(358, 118) scale(0.65)">
+                    <Flag size={24} fill="#8B5E3C" stroke="#8B5E3C" />
+                  </g>
                 </svg>
               </div>
             </>
@@ -439,7 +441,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
           <div className={`flex relative z-10 ${user.profileTheme === 'hipster' ? 'flex-row items-center gap-6' : 'items-center gap-6'}`}>
             <div className="relative shrink-0">
               {user.profileTheme === 'handdrawn' && (
-                <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-16 h-6 washi-tape-grid bg-amber-200/60 rotate-[-2deg] z-20 border-x border-amber-300/20 shadow-sm" />
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-6 washi-tape-grid bg-amber-200/60 rotate-[-2deg] z-20 border-x border-amber-300/20 shadow-sm" />
               )}
               <div className={`
                 ${user.profileTheme === 'handdrawn' ? 'w-36 h-auto aspect-[3/4] rounded-none border-[1.5px] border-[#4B3F35]/10 p-2 pb-6 bg-white shadow-[4px_4px_15px_rgba(0,0,0,0.05)] overflow-hidden rotate-[-2deg]' :

@@ -12,9 +12,10 @@ interface DashboardProps {
   onSelectTrip: (tripId: string) => void;
   isCreateModalOpen: boolean;
   setIsCreateModalOpen: (open: boolean) => void;
+  onJoinTrip: (code: string) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip, isCreateModalOpen, setIsCreateModalOpen }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip, isCreateModalOpen, setIsCreateModalOpen, onJoinTrip }) => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [tripToDelete, setTripToDelete] = useState<{id: string, name: string} | null>(null);
   const [newTripName, setNewTripName] = useState('');
@@ -22,6 +23,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [modalMode, setModalMode] = useState<'create' | 'join'>('create');
+  const [joinCode, setJoinCode] = useState('');
 
   const filteredTrips = trips.filter(t => 
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -32,6 +35,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
     if (!newTripName || !startDate || !endDate) return;
 
     try {
+      // Generate a short 6-character invite code
+      const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid ambiguous chars
+      let inviteCode = '';
+      for (let i = 0; i < 6; i++) {
+        inviteCode += characters.charAt(Math.floor(Math.random() * characters.length));
+      }
+
       const tripData = {
         name: newTripName,
         city: newTripCity,
@@ -41,7 +51,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         coverImage: `https://picsum.photos/seed/${newTripName}/800/400`,
         memberUids: [user.uid],
         ownerUid: user.uid,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        inviteCode
       };
       const tripRef = await addDoc(collection(db, 'trips'), tripData);
       
@@ -468,84 +479,142 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              className="relative w-full max-w-[390px] bg-white rounded-t-[40px] sm:rounded-[40px] p-8 shadow-2xl"
+              className="relative w-full max-w-[390px] bg-white rounded-[40px] p-8 shadow-2xl"
             >
               <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-6 sm:hidden" />
-              <h3 className="text-xl font-black text-slate-800 mb-6">開啟新旅程 🌟</h3>
               
-              <form onSubmit={handleCreateTrip} className="space-y-3">
-                <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">旅程名稱</label>
+              <div className="flex gap-4 mb-6 border-b border-slate-100">
+                <button 
+                  onClick={() => setModalMode('create')}
+                  className={`pb-2 text-sm font-black transition-all relative ${modalMode === 'create' ? 'text-sky-500' : 'text-slate-300'}`}
+                >
+                  建立新旅程
+                  {modalMode === 'create' && <motion.div layoutId="modal-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-sky-500" />}
+                </button>
+                <button 
+                  onClick={() => setModalMode('join')}
+                  className={`pb-2 text-sm font-black transition-all relative ${modalMode === 'join' ? 'text-sky-500' : 'text-slate-300'}`}
+                >
+                  加入旅程
+                  {modalMode === 'join' && <motion.div layoutId="modal-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-sky-500" />}
+                </button>
+              </div>
+
+              {modalMode === 'create' ? (
+                <form onSubmit={handleCreateTrip} className="space-y-3">
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">旅程名稱</label>
+                      <input 
+                        type="text" 
+                        value={newTripName}
+                        onChange={(e) => setNewTripName(e.target.value)}
+                        placeholder="例如：2026 首爾冬日之旅"
+                        className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent border-b border-stone-200' : 'rounded-xl bg-slate-50 border-none'}`}
+                        style={{ outline: 'none' }}
+                        onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}
+                        onBlur={(e) => e.target.style.boxShadow = 'none'}
+                      />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">目的地城市 (以+分隔)</label>
+                      <input 
+                        type="text" 
+                        value={newTripCity}
+                        onChange={(e) => setNewTripCity(e.target.value)}
+                        placeholder="例如：首爾+釜山"
+                        className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent border-b border-stone-200' : 'rounded-xl bg-slate-50 border-none'}`}
+                        style={{ outline: 'none' }}
+                        onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}
+                        onBlur={(e) => e.target.style.boxShadow = 'none'}
+                      />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">開始日期</label>
+                      <input 
+                        type="date" 
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent border-b border-stone-200' : 'rounded-xl bg-slate-50 border-none'}`}
+                        style={{ outline: 'none' }}
+                        onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}
+                        onBlur={(e) => e.target.style.boxShadow = 'none'}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">結束日期</label>
+                      <input 
+                        type="date" 
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent border-b border-stone-200' : 'rounded-xl bg-slate-50 border-none'}`}
+                        style={{ outline: 'none' }}
+                        onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}
+                        onBlur={(e) => e.target.style.boxShadow = 'none'}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => setIsCreateModalOpen(false)}
+                      className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-500 text-xs font-black transition-all active:scale-95"
+                    >
+                      取消
+                    </button>
+                    <button 
+                      type="submit"
+                      className="flex-[2] py-3 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95"
+                      style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.3)' }}
+                    >
+                      建立旅程
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-6 py-4">
+                  <div className="text-center space-y-2">
+                    <div className="text-3xl">🎫</div>
+                    <p className="text-xs font-bold text-slate-500 leading-relaxed text-center">輸入朋友分享給您的旅程編號<br/>即可立即同步計畫！</p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">旅程編號</label>
                     <input 
                       type="text" 
-                      value={newTripName}
-                      onChange={(e) => setNewTripName(e.target.value)}
-                      placeholder="例如：2026 首爾冬日之旅"
-                      className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent' : 'rounded-xl bg-slate-50 border-none'}`}
-                      style={{ outline: 'none' }}
-                      onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}
-                      onBlur={(e) => e.target.style.boxShadow = 'none'}
-                    />
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">目的地城市 (以+分隔)</label>
-                    <input 
-                      type="text" 
-                      value={newTripCity}
-                      onChange={(e) => setNewTripCity(e.target.value)}
-                      placeholder="例如：首爾+釜山"
-                      className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent' : 'rounded-xl bg-slate-50 border-none'}`}
-                      style={{ outline: 'none' }}
-                      onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}
-                      onBlur={(e) => e.target.style.boxShadow = 'none'}
-                    />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">開始日期</label>
-                    <input 
-                      type="date" 
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent' : 'rounded-xl bg-slate-50 border-none'}`}
-                      style={{ outline: 'none' }}
-                      onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}
-                      onBlur={(e) => e.target.style.boxShadow = 'none'}
+                      placeholder="請貼上編號..." 
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value)}
+                      className={`w-full px-4 py-4 rounded-xl bg-slate-50 border-none outline-none text-center text-sm font-black text-sky-600 tracking-wider placeholder:tracking-normal placeholder:font-bold placeholder:text-slate-300 font-mono`}
                     />
                   </div>
-                  <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">結束日期</label>
-                    <input 
-                      type="date" 
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className={`w-full px-4 py-3 outline-none text-xs font-bold text-slate-700 transition-all ${user.profileTheme === 'handdrawn' ? 'bg-transparent' : 'rounded-xl bg-slate-50 border-none'}`}
-                      style={{ outline: 'none' }}
-                      onFocus={(e) => { if (user.profileTheme !== 'handdrawn') e.target.style.boxShadow = '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)'; }}
-                      onBlur={(e) => e.target.style.boxShadow = 'none'}
-                    />
+
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => setIsCreateModalOpen(false)}
+                      className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-500 text-xs font-black active:scale-95 transition-all"
+                    >
+                      取消
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (joinCode.trim()) {
+                          onJoinTrip(joinCode.trim());
+                          setIsCreateModalOpen(false);
+                          setJoinCode('');
+                        }
+                      }}
+                      disabled={!joinCode.trim()}
+                      className="flex-[2] py-3.5 rounded-2xl bg-sky-500 text-white text-xs font-black shadow-lg shadow-sky-100 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+                    >
+                      加入旅程
+                    </button>
                   </div>
                 </div>
-
-                <div className="pt-3 flex gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => setIsCreateModalOpen(false)}
-                    className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-500 text-xs font-black transition-all active:scale-95"
-                  >
-                    取消
-                  </button>
-                  <button 
-                    type="submit"
-                    className="flex-[2] py-3 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95"
-                    style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.3)' }}
-                  >
-                    建立旅程
-                  </button>
-                </div>
-              </form>
+              )}
             </motion.div>
           </div>
         )}

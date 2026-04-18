@@ -1,10 +1,15 @@
 
 const CACHE_NAME = 'gogotrip';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/index.tsx',
+  './',
+  './index.html',
+  './manifest.json',
+  './index.tsx',
+  './trippic.png',
+  './a1.png',
+  './a2.png',
+  './s1.png',
+  './s2.png',
 ];
 
 self.addEventListener('install', (event) => {

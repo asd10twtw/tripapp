@@ -10,7 +10,7 @@ import { ProfileView } from './components/ProfileView';
 import { BackgroundDoodles } from './components/BackgroundDoodles';
 import { User } from 'firebase/auth';
 import { MainTab, Trip } from './types';
-import { Home, Map as MapIcon, PlusCircle, User as UserIcon } from 'lucide-react';
+import { Home, Map as MapIcon, PlusCircle, User as UserIcon, MapPin, Plus, Compass } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, orderBy, onSnapshot, getDocs, limit, addDoc, deleteDoc, arrayUnion, updateDoc } from 'firebase/firestore';
 
@@ -66,13 +66,41 @@ const App: React.FC = () => {
   const handleJoinTrip = async () => {
     if (!joiningTripId || !user) return;
     try {
-      const tripRef = doc(db, 'trips', joiningTripId);
-      const tripSnap = await getDoc(tripRef);
+      let finalTripId = joiningTripId;
+      let tripRef = doc(db, 'trips', finalTripId);
+      let tripSnap = await getDoc(tripRef);
+
+      // If not found by direct ID, check short code or prefix
+      if (!tripSnap.exists()) {
+        const shortCodeQuery = query(collection(db, 'trips'), where('inviteCode', '==', joiningTripId.toUpperCase()), limit(1));
+        const shortCodeSnap = await getDocs(shortCodeQuery);
+        
+        if (!shortCodeSnap.empty) {
+          finalTripId = shortCodeSnap.docs[0].id;
+          tripRef = doc(db, 'trips', finalTripId);
+          tripSnap = shortCodeSnap.docs[0];
+        } else {
+          // Try prefix match for 8-char codes
+          const prefixQuery = query(
+            collection(db, 'trips'), 
+            where('__name__', '>=', joiningTripId), 
+            where('__name__', '<', joiningTripId + '\uf8ff'),
+            limit(1)
+          );
+          const prefixSnap = await getDocs(prefixQuery);
+          if (!prefixSnap.empty) {
+            finalTripId = prefixSnap.docs[0].id;
+            tripRef = doc(db, 'trips', finalTripId);
+            tripSnap = prefixSnap.docs[0];
+          }
+        }
+      }
+
       if (tripSnap.exists()) {
         await updateDoc(tripRef, {
           memberUids: arrayUnion(user.uid)
         });
-        navigate(`/trip/${joiningTripId}`);
+        navigate(`/trip/${finalTripId}`);
         setShowJoinModal(false);
         setJoiningTripId(null);
         // Clear URL param
@@ -80,7 +108,7 @@ const App: React.FC = () => {
         url.searchParams.delete('tripId');
         window.history.replaceState({}, '', url.toString());
       } else {
-        alert("找不到該旅程，可能已被刪除。");
+        alert("找不到該旅程，可能編號錯誤或已被刪除。");
         setJoiningTripId(null);
         setShowJoinModal(false);
       }
@@ -286,8 +314,8 @@ const App: React.FC = () => {
     if (isFirstLoad) {
       return (
         <div className="min-h-screen bg-[#FCFBF7] flex flex-col items-center justify-center">
-          <div className="w-16 h-16 bg-sky-400 rounded-[28px] flex items-center justify-center mb-6 animate-pulse shadow-xl shadow-sky-400/20">
-            <img src="/trippic.png" alt="Logo" className="w-10 h-10 object-contain opacity-80" />
+          <div className="w-24 h-24 flex items-center justify-center mb-12">
+            <img src="./trippic.png" alt="Logo" className="w-full h-full object-contain" />
           </div>
           <div className="w-8 h-8 border-[3px] border-slate-200 border-t-sky-400 rounded-full animate-spin"></div>
         </div>
@@ -316,6 +344,7 @@ const App: React.FC = () => {
               onSelectTrip={(id) => navigate(`/trip/${id}`)} 
               isCreateModalOpen={isCreateModalOpen} 
               setIsCreateModalOpen={setIsCreateModalOpen} 
+              onJoinTrip={(code) => setJoiningTripId(code)}
             />
           } />
           <Route path="/profile" element={<ProfileView user={user} trips={trips} />} />
@@ -329,16 +358,62 @@ const App: React.FC = () => {
         </Routes>
       </div>
 
+      {/* Join Trip Modal */}
+      <AnimatePresence>
+        {showJoinModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+              onClick={() => { setShowJoinModal(false); setJoiningTripId(null); }}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xs bg-white rounded-[40px] p-8 shadow-2xl flex flex-col items-center text-center"
+            >
+              <div className="w-20 h-20 bg-sky-50 rounded-full flex items-center justify-center mb-6 text-sky-500">
+                <Compass size={40} />
+              </div>
+              <h3 className="text-xl font-black text-slate-800 mb-2">加入新的旅程？</h3>
+              <p className="text-slate-400 text-xs font-bold mb-8 leading-relaxed">
+                您獲邀加入一個新的旅程！<br/>點擊下方按鈕即可開始與夥伴們同步計畫。
+              </p>
+              <div className="flex w-full gap-3">
+                <button 
+                  onClick={() => { setShowJoinModal(false); setJoiningTripId(null); }}
+                  className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 text-sm font-black active:scale-95 transition-all"
+                >
+                  先不要
+                </button>
+                <button 
+                  onClick={handleJoinTrip}
+                  className="flex-[2] py-4 rounded-2xl bg-sky-500 text-white text-sm font-black shadow-lg shadow-sky-100 active:scale-95 transition-all"
+                >
+                  立刻加入
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Main Bottom Navigation (Only on main tabs) */}
       {!location.pathname.startsWith('/trip/') && (
-        <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'px-6 pb-4' : 'px-6 pb-[env(safe-area-inset-bottom,16px)]'} pt-2 z-[60]`}>
+        <div className={`fixed bottom-3 left-0 right-0 max-w-md mx-auto px-6 z-[60]`}>
           <nav className={`
-            ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'border-2 border-[#4B3F35]/10 bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.04)] rounded-none flex' : 
+            ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 
+              'bg-white rounded-2xl flex items-stretch p-1 relative overflow-visible border-[1.5px] border-[#4B3F35]/15 shadow-[0_4px_20px_rgba(75,63,53,0.06)]' : 
               user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
               user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
               'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
-            p-0 overflow-hidden justify-between items-stretch
+            justify-between
           `}>
+            {/* Washi Tape Removed */}
+
             <NavButton 
               active={location.pathname === '/'} 
               onClick={() => navigate('/')} 
@@ -346,15 +421,29 @@ const App: React.FC = () => {
               label="首頁" 
               theme={user.profileTheme} 
             />
-            {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
-            <NavButton 
-              active={false} 
-              onClick={() => { navigate('/'); setIsCreateModalOpen(true); }} 
-              icon={PlusCircle} 
-              label="新增" 
-              theme={user.profileTheme} 
-            />
-            {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
+            
+            {(user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook') ? (
+              <div className="relative flex-1 flex flex-col items-center justify-center pt-1.5 pb-2">
+                <button 
+                  onClick={() => { navigate('/'); setIsCreateModalOpen(true); }}
+                  className="flex flex-col items-center group"
+                >
+                  <div className="w-9 h-9 bg-[#FCB64E] rounded-full flex items-center justify-center shadow-sm border border-white/20 transition-transform group-active:scale-95 mb-0.5">
+                    <Plus size={22} strokeWidth={3} className="text-white" />
+                  </div>
+                  <span className="text-[9px] font-black text-[#8B5E3C] tracking-widest">新增</span>
+                </button>
+              </div>
+            ) : (
+              <NavButton 
+                active={false} 
+                onClick={() => { navigate('/'); setIsCreateModalOpen(true); }} 
+                icon={Plus} 
+                label="新增" 
+                theme={user.profileTheme} 
+              />
+            )}
+
             <NavButton 
               active={location.pathname === '/profile'} 
               onClick={() => navigate('/profile')} 
@@ -383,19 +472,21 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
   const isWatercolor = theme === 'watercolor';
   
   if (isHanddrawn) {
+    if (label === '新增') return null; // Handled separately in the nav
+
     return (
       <button 
         onClick={onClick} 
-        className={`flex flex-col items-center justify-center flex-1 py-3 group relative font-handdrawn transition-all ${active ? 'bg-stone-50' : 'hover:bg-stone-50/50'}`}
+        className={`flex flex-col items-center justify-center flex-1 py-2 group relative font-handdrawn transition-all`}
       >
-        <div className={`transition-all duration-300 flex items-center justify-center mb-1 ${active ? 'text-stone-800 scale-110' : 'text-stone-300'}`}>
-          <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+        <div className={`transition-all duration-300 flex items-center justify-center mb-0.5 ${active ? 'text-[#8B5E3C] scale-110' : 'text-stone-300 opacity-80'}`}>
+          <Icon size={20} strokeWidth={active ? 2.5 : 2} />
         </div>
-        <span className={`text-[10px] font-black transition-colors duration-300 ${active ? 'text-stone-800' : 'text-stone-300'}`}>
+        <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${active ? 'text-[#8B5E3C]' : 'text-stone-300'}`}>
           {label}
         </span>
         {active && (
-          <div className="absolute inset-0 border-[2.5px] border-[#4B3F35] pointer-events-none" />
+          <div className="absolute -bottom-1 w-6 h-[2px] bg-[#8B5E3C]/30 rounded-full" style={{ clipPath: 'polygon(1% 40%, 99% 2%, 96% 100%, 4% 90%)' }} />
         )}
       </button>
     );

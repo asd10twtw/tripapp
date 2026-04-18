@@ -99,25 +99,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   };
 
   const handleShareTrip = async () => {
-    const shareUrl = `${window.location.origin}?tripId=${tripId}`;
-    const shareData = {
-      title: `加入我的旅程：${trip?.name || '旅行'}`,
-      text: `這裡有個超棒的旅程計畫，快來跟我一起規畫吧！`,
-      url: shareUrl,
-    };
-
-    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          console.error('Share failed:', err);
-          copyToClipboard(shareUrl);
-        }
-      }
-    } else {
-      copyToClipboard(shareUrl);
-    }
+    setIsQrModalOpen(true);
   };
 
   const copyToClipboard = (text: string) => {
@@ -558,18 +540,18 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
       </main>
 
       {/* Bottom Navigation */}
-      <div className={`fixed bottom-0 left-0 right-0 max-w-[390px] mx-auto ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'px-6 pb-2' : 'px-6 pb-[env(safe-area-inset-bottom,16px)]'} pt-2 z-[60]`}>
+      <div className={`fixed bottom-3 left-0 right-0 max-w-md mx-auto px-6 z-[60]`}>
         <nav className={`
-          ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'border-2 border-[#4B3F35]/10 bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.04)] rounded-none flex' : 
+          ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 
+            'bg-white rounded-2xl flex items-stretch p-1 relative overflow-visible border-[1.5px] border-[#4B3F35]/15 shadow-[0_4px_20px_rgba(75,63,53,0.06)]' : 
+            user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
+            user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
             'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
-          p-0 overflow-hidden justify-between items-stretch
+          justify-between
         `}>
           <NavButton active={activeTab === Tab.SCHEDULE} onClick={() => setActiveTab(Tab.SCHEDULE)} icon={Calendar} label="行程" theme={user.profileTheme} />
-          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
           <NavButton active={activeTab === Tab.EXPENSE} onClick={() => setActiveTab(Tab.EXPENSE)} icon={CircleDollarSign} label="記帳" theme={user.profileTheme} />
-          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
           <NavButton active={activeTab === Tab.PLANNING} onClick={() => setActiveTab(Tab.PLANNING)} icon={ShoppingBag} label="購物" theme={user.profileTheme} />
-          {user.profileTheme === 'scrapbook' || user.profileTheme === 'handdrawn' ? <div className="w-px bg-[#4B3F35]/20" /> : null}
           <NavButton active={activeTab === Tab.JOURNAL} onClick={() => setActiveTab(Tab.JOURNAL)} icon={BookOpen} label="日誌" theme={user.profileTheme} />
         </nav>
       </div>
@@ -718,19 +700,6 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
               </div>
 
               <div className="space-y-6">
-                <div className="flex bg-white/50 border border-slate-100 p-4 rounded-3xl items-center justify-between group hov:bg-white transition-all cursor-pointer" onClick={() => setIsQrModalOpen(true)}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-sky-50 text-sky-500 flex items-center justify-center">
-                      <Share2 size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-700">QR Code 分享</p>
-                      <p className="text-[10px] font-bold text-slate-400">讓旅伴掃描快速加入</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
-                </div>
-
                 <div>
                   <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 mb-3 block">旅程資訊</label>
                   <div className="space-y-3">
@@ -770,7 +739,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                           type="date" 
                           value={editStartDate} 
                           onChange={(e) => handleUpdateTripInfo('startDate', e.target.value)}
-                          className="w-full bg-transparent border-none outline-none font-bold text-slate-700 text-sm"
+                          className="w-full bg-transparent border-none outline-none font-bold text-slate-700 text-[11px]"
                         />
                       </div>
                       <div className={`${user.profileTheme === 'handdrawn' ? 'p-3' : 'bg-slate-50 p-3 rounded-2xl border border-slate-100'}`}>
@@ -779,7 +748,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                           type="date" 
                           value={editEndDate} 
                           onChange={(e) => handleUpdateTripInfo('endDate', e.target.value)}
-                          className="w-full bg-transparent border-none outline-none font-bold text-slate-700 text-sm"
+                          className="w-full bg-transparent border-none outline-none font-bold text-slate-700 text-[11px]"
                         />
                       </div>
                     </div>
@@ -972,37 +941,34 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 <X size={16} strokeWidth={3} />
               </button>
 
-              <div className="mb-6 text-center">
-                <h3 className="text-lg font-black text-slate-800 mb-1">掃描加入旅程</h3>
+              <div className="mb-6 text-center w-full">
+                <h3 className="text-lg font-black text-slate-800 mb-1">分享旅程編號</h3>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{trip?.name}</p>
               </div>
 
-              <div className="bg-white p-6 rounded-[32px] shadow-soft border border-slate-50 mb-8">
-                <QRCodeSVG 
-                  value={`${window.location.origin}?tripId=${tripId}`}
-                  size={180}
-                  level="H"
-                  includeMargin={false}
-                  imageSettings={{
-                    src: "/trippic.png",
-                    x: undefined,
-                    y: undefined,
-                    height: 30,
-                    width: 30,
-                    excavate: true,
-                  }}
-                />
+              <div className="w-full bg-slate-50 p-6 rounded-[32px] border border-slate-100 mb-8 flex flex-col items-center gap-4">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">旅程專屬編號</div>
+                <div className="text-xl font-black text-sky-600 tracking-wider break-all text-center font-mono">
+                  {trip?.inviteCode || tripId.substring(0, 8)}
+                </div>
+                <button 
+                  onClick={() => copyToClipboard(trip?.inviteCode || tripId.substring(0, 8))}
+                  className="px-4 py-2 bg-white text-sky-500 rounded-full text-[10px] font-black border border-sky-100 shadow-sm active:scale-95 transition-all"
+                >
+                  {isCopied ? '已複製編號' : '點擊複製編號'}
+                </button>
               </div>
 
               <button 
                 onClick={() => {
-                  const url = `${window.location.origin}?tripId=${tripId}`;
+                  const displayCode = trip?.inviteCode || tripId.substring(0, 8);
+                  const url = `${window.location.origin}?tripId=${displayCode}`;
                   copyToClipboard(url);
                   setIsQrModalOpen(false);
                 }}
                 className="w-full py-4 bg-sky-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-sky-100 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
-                <Check size={18} /> {isCopied ? '已複製連結' : '複製邀請連結'}
+                <Check size={18} /> {isCopied ? '已複製邀請連結' : '直接複製邀請連結'}
               </button>
             </motion.div>
           </div>
@@ -1044,36 +1010,41 @@ const MemberNameInput = ({ member, onUpdate }: { member: Member, onUpdate: (id: 
 
 const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, label, theme }) => {
   const isHanddrawn = theme === 'handdrawn' || theme === 'scrapbook';
+  const isHipster = theme === 'hipster';
+  const isWatercolor = theme === 'watercolor';
   
   if (isHanddrawn) {
     return (
       <button 
         onClick={onClick} 
-        className={`flex flex-col items-center justify-center flex-1 py-3 group relative font-handdrawn transition-all ${active ? 'bg-stone-50' : 'hover:bg-stone-50/50'}`}
+        className={`flex flex-col items-center justify-center flex-1 py-2 group relative font-handdrawn transition-all`}
       >
-        <div className={`transition-all duration-300 flex items-center justify-center mb-1 ${active ? 'text-stone-800 scale-110' : 'text-stone-300'}`}>
-          <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+        <div className={`transition-all duration-300 flex items-center justify-center mb-0.5 ${active ? 'text-[#8B5E3C] scale-110' : 'text-stone-300 opacity-80'}`}>
+          <Icon size={20} strokeWidth={active ? 2.5 : 2} />
         </div>
-        <span className={`text-[10px] font-black transition-colors duration-300 ${active ? 'text-stone-800' : 'text-stone-300'}`}>
+        <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${active ? 'text-[#8B5E3C]' : 'text-stone-300'}`}>
           {label}
         </span>
         {active && (
-          <div className="absolute inset-0 border-[2.5px] border-[#4B3F35] pointer-events-none" />
+          <div className="absolute -bottom-1 w-6 h-[2px] bg-[#8B5E3C]/30 rounded-full" style={{ clipPath: 'polygon(1% 40%, 99% 2%, 96% 100%, 4% 90%)' }} />
         )}
       </button>
     );
   }
 
   return (
-    <button onClick={onClick} className="flex flex-col items-center justify-center flex-1 py-2 group relative">
-      <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-slate-300 group-active:scale-90'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
-        <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+    <button onClick={onClick} className={`flex flex-col items-center justify-center flex-1 py-2 group relative ${isHipster ? 'font-hipster' : isWatercolor ? 'font-sans italic' : ''}`}>
+      <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-stone-300 group-active:scale-90'}`} style={{ color: active ? (isHipster ? '#78716C' : 'var(--brand-color)') : (isWatercolor ? '#A5C4D4' : undefined) }}>
+        <Icon size={20} strokeWidth={active ? 2 : 1.5} />
       </div>
-      <span className={`text-[9px] font-black mt-0.5 transition-colors duration-300 ${active ? '' : 'text-slate-300'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
+      <span className={`text-[9px] font-bold mt-0.5 transition-colors duration-300 ${active ? '' : (isWatercolor ? 'text-sky-200' : 'text-stone-300')}`} style={{ color: active ? (isHipster ? '#78716C' : 'var(--brand-color)') : undefined }}>
         {label}
       </span>
-      {active && (
+      {active && !isHipster && (
         <motion.div layoutId="nav-active" className="absolute -bottom-1 w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--brand-color)' }} />
+      )}
+      {active && isHipster && (
+        <div className="absolute top-1 right-4 w-1 h-1 bg-stone-400 rounded-full" />
       )}
     </button>
   );
