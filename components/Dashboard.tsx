@@ -121,7 +121,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         };
       default:
         return {
-          container: 'bg-white',
+          container: 'bg-[#F8FAFC]',
           font: 'font-sans',
           accent: 'text-slate-400',
           card: 'bg-white border border-slate-100 shadow-soft',
@@ -410,14 +410,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
               </div>
             )}
           </div>
-
-          {/* Floating Add Button for Scrapbook */}
-          <button 
-            onClick={() => setIsCreateModalOpen(true)}
-            className="fixed bottom-24 right-6 w-14 h-14 bg-[#8B5E3C] text-white rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-all z-40 border-4 border-white"
-          >
-            <Plus size={28} strokeWidth={3} />
-          </button>
         </div>
       ) : (
         <>

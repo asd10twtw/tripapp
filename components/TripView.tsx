@@ -6,12 +6,13 @@ import { ScheduleView } from './ScheduleView';
 import { ExpenseView } from './ExpenseView';
 import { PlanningView } from './PlanningView';
 import { JournalView } from './JournalView';
-import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints, Trash2 } from 'lucide-react';
+import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, ChevronRight, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDocs, query, orderBy, addDoc, limit, arrayUnion, deleteDoc, writeBatch, where, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import * as XLSX from 'xlsx';
 import Cropper from 'react-easy-crop';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface TripViewProps {
   user: UserProfile;
@@ -43,6 +44,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [newMemberName, setNewMemberName] = useState('');
   const [isDeleteTripModalOpen, setIsDeleteTripModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   
   // Cropping state
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -96,9 +98,30 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     }
   };
 
-  const handleShareTrip = () => {
+  const handleShareTrip = async () => {
     const shareUrl = `${window.location.origin}?tripId=${tripId}`;
-    navigator.clipboard.writeText(shareUrl).then(() => {
+    const shareData = {
+      title: `加入我的旅程：${trip?.name || '旅行'}`,
+      text: `這裡有個超棒的旅程計畫，快來跟我一起規畫吧！`,
+      url: shareUrl,
+    };
+
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Share failed:', err);
+          copyToClipboard(shareUrl);
+        }
+      }
+    } else {
+      copyToClipboard(shareUrl);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
     });
@@ -371,7 +394,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     switch (user?.profileTheme) {
       case 'handdrawn': return 'bg-transparent';
       case 'hipster': return 'bg-[#FDFCF8]';
-      case 'minimalist': return 'bg-[#F1F5F9]';
+      case 'minimalist': return 'bg-[#F8FAFC]';
       default: return 'bg-[#FCFBF7]';
     }
   };
@@ -381,9 +404,9 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
       {/* Background doodles are handled by App.tsx */}
       {/* Header */}
       <div className={`px-6 pt-6 pb-4 shrink-0 flex flex-col gap-4 relative z-30 backdrop-blur-sm ${
-        user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6]/80 border-b border-[#4B3F35]/20' : 
-        user.profileTheme === 'scrapbook' ? 'bg-[#FDFCF8]/80 border-b border-stone-200/50' :
-        user.profileTheme === 'minimalist' ? 'bg-[#F8FAFC]/80 border-b border-slate-200/50' :
+        user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6]/80' : 
+        user.profileTheme === 'scrapbook' ? 'bg-[#FDFCF8]/80' :
+        user.profileTheme === 'minimalist' ? 'bg-[#F8FAFC]/80' :
         'bg-transparent'
       }`}>
         {/* Top Bar: Back, Share, Settings */}
@@ -695,6 +718,19 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
               </div>
 
               <div className="space-y-6">
+                <div className="flex bg-white/50 border border-slate-100 p-4 rounded-3xl items-center justify-between group hov:bg-white transition-all cursor-pointer" onClick={() => setIsQrModalOpen(true)}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-sky-50 text-sky-500 flex items-center justify-center">
+                      <Share2 size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-700">QR Code 分享</p>
+                      <p className="text-[10px] font-bold text-slate-400">讓旅伴掃描快速加入</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
+                </div>
+
                 <div>
                   <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 mb-3 block">旅程資訊</label>
                   <div className="space-y-3">
@@ -905,6 +941,69 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                   確定刪除
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
+      {/* QR Code Modal */}
+      <AnimatePresence>
+        {isQrModalOpen && (
+          <div className="fixed inset-0 z-[400] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsQrModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xs bg-white rounded-[40px] p-8 shadow-2xl overflow-hidden flex flex-col items-center"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-sky-400 to-indigo-400" />
+              
+              <button 
+                onClick={() => setIsQrModalOpen(false)}
+                className="absolute top-4 right-4 p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={16} strokeWidth={3} />
+              </button>
+
+              <div className="mb-6 text-center">
+                <h3 className="text-lg font-black text-slate-800 mb-1">掃描加入旅程</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{trip?.name}</p>
+              </div>
+
+              <div className="bg-white p-6 rounded-[32px] shadow-soft border border-slate-50 mb-8">
+                <QRCodeSVG 
+                  value={`${window.location.origin}?tripId=${tripId}`}
+                  size={180}
+                  level="H"
+                  includeMargin={false}
+                  imageSettings={{
+                    src: "/trippic.png",
+                    x: undefined,
+                    y: undefined,
+                    height: 30,
+                    width: 30,
+                    excavate: true,
+                  }}
+                />
+              </div>
+
+              <button 
+                onClick={() => {
+                  const url = `${window.location.origin}?tripId=${tripId}`;
+                  copyToClipboard(url);
+                  setIsQrModalOpen(false);
+                }}
+                className="w-full py-4 bg-sky-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-sky-100 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <Check size={18} /> {isCopied ? '已複製連結' : '複製邀請連結'}
+              </button>
             </motion.div>
           </div>
         )}

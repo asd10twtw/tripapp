@@ -277,7 +277,7 @@ const App: React.FC = () => {
     switch (user?.profileTheme) {
       case 'handdrawn': return 'bg-[#F9F5E6]';
       case 'hipster': return 'bg-[#FDFCF8]';
-      case 'minimalist': return 'bg-[#F1F5F9]';
+      case 'minimalist': return 'bg-[#F8FAFC]';
       default: return 'bg-[#FCFBF7]';
     }
   };

@@ -289,8 +289,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
       case 'minimalist':
       default:
         return {
-          container: 'bg-[#F1F5F9]',
-          header: 'bg-[#F1F5F9] border-b border-slate-200/50',
+          container: 'bg-[#F8FAFC]',
+          header: 'bg-[#F8FAFC] border-b border-slate-200/50',
           card: 'bg-white rounded-[32px] border border-slate-100 shadow-soft',
           font: 'font-sans',
           accent: 'text-slate-400',
@@ -518,9 +518,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
 
               {user.profileTheme === 'hipster' && (
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <div className="px-2 py-0.5 bg-stone-800 text-[7px] font-hipster text-stone-100 uppercase tracking-widest flex items-center gap-1 shrink-0">
-                    <Check size={8} /> Verified
-                  </div>
                   {user.interests && user.interests.length > 0 ? (
                     user.interests.map((interest, idx) => (
                       <div key={idx} className="px-2 py-0.5 border border-stone-200 text-[7px] font-hipster text-stone-400 uppercase tracking-widest italic shrink-0">
@@ -761,7 +758,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                   />
                 </div>
                 <div>
-                  <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block ml-1 mb-1">所在地 (目的地請用+分隔)</label>
+                  <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block ml-1 mb-1">所在地</label>
                   <input 
                     type="text" 
                     value={editLocation}
