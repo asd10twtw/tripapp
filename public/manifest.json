@@ -12,22 +12,16 @@
   "theme_color": "#FCFBF7",
   "icons": [
     {
-      "src": "https://cdn.imgchest.com/files/44520c1f1cd5.png",
+      "src": "https://i.ibb.co/Y7bFp8jC/trippic.png?v=2",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://cdn.imgchest.com/files/44520c1f1cd5.png",
+      "src": "https://i.ibb.co/Y7bFp8jC/trippic.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "https://cdn.imgchest.com/files/44520c1f1cd5.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
   ]
 }

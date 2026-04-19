@@ -51,7 +51,15 @@ service cloud.firestore {
       return data.uid is string && data.uid == request.auth.uid &&
              data.displayName is string && data.displayName.size() <= 100 &&
              data.email is string && data.email.size() <= 200 &&
-             (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 200000));
+             (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 200000)) &&
+             (!('motto' in data) || (data.motto is string && data.motto.size() <= 200)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 100)) &&
+             (!('interests' in data) || (data.interests is list && data.interests.size() <= 20)) &&
+             (!('profileTheme' in data) || (data.profileTheme is string)) &&
+             (!('themeColor' in data) || (data.themeColor is string)) &&
+             (!('githubId' in data) || true) && 
+             (!('githubUsername' in data) || (data.githubUsername is string)) &&
+             (!('githubUrl' in data) || (data.githubUrl is string));
     }
 
     function isValidTrip(data) {
@@ -79,7 +87,10 @@ service cloud.firestore {
                     incoming().keys().hasAll(['uid', 'displayName', 'email']) && 
                     incoming().keys().size() >= 3;
       allow update: if (isOwner(uid) || isAdmin()) && isValidUserProfile(incoming()) &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'profileTheme', 'themeColor', 'email']);
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'displayName', 'photoURL', 'profileTheme', 'themeColor', 'email',
+                      'motto', 'location', 'interests', 'githubId', 'githubUsername', 'githubUrl'
+                    ]);
     }
 
     match /trips/{tripId} {

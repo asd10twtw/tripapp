@@ -452,7 +452,7 @@ const App: React.FC = () => {
       return (
         <div className="min-h-screen bg-[#FCFBF7] flex flex-col items-center justify-center">
           <div className="w-24 h-24 flex items-center justify-center mb-12">
-            <img src="https://cdn.imgchest.com/files/44520c1f1cd5.png" alt="Logo" className="w-full h-full object-contain" />
+            <img src="https://i.ibb.co/Y7bFp8jC/trippic.png" alt="Logo" className="w-full h-full object-contain" />
           </div>
           <div className="w-8 h-8 border-[3px] border-slate-200 border-t-sky-400 rounded-full animate-spin"></div>
         </div>
@@ -573,10 +573,10 @@ const App: React.FC = () => {
 
       {/* Main Bottom Navigation (Only on main tabs) */}
       {!location.pathname.startsWith('/trip/') && (
-        <div className={`fixed bottom-3 left-0 right-0 max-w-md mx-auto px-6 z-[60]`}>
+        <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[60] ${user.profileTheme === 'handdrawn' ? 'px-0 pt-2' : 'px-6 bottom-3'}`}>
           <nav className={`
             ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 
-              'bg-white rounded-2xl flex items-stretch p-1 relative overflow-visible border-[1.5px] border-[#4B3F35]/15 shadow-[0_4px_20px_rgba(75,63,53,0.06)]' : 
+              (user.profileTheme === 'handdrawn' ? 'bg-white/95 backdrop-blur-sm rounded-none border-t-[1.5px] border-b-0 border-r-0 border-l-0' : 'bg-white rounded-2xl border-[1.5px]') + ' flex items-stretch p-1 relative overflow-visible border-[#4B3F35]/15 shadow-[0_-12px_40px_rgba(75,63,53,0.12)]' : 
               user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
               user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
               'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 

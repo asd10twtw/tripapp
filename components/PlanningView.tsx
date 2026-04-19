@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { TodoItem, Member } from '../types';
 import { User } from 'firebase/auth';
 import { Check, Plus, ShoppingBasket, ShoppingBag, Trash2, MapPin, Image as ImageIcon, Camera, X, Loader2 } from 'lucide-react';
 import { db } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, orderBy } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
+import Cropper from 'react-easy-crop';
 
 interface PlanningViewProps {
   members: Member[];
@@ -25,6 +26,87 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
   const [showAddModal, setShowAddModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+
+  // Cropping
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [isCropping, setIsCropping] = useState(false);
+
+  const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> => {
+    const image = new Image();
+    image.src = imageSrc;
+    await new Promise((resolve) => (image.onload = resolve));
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    canvas.width = pixelCrop.width;
+    canvas.height = pixelCrop.height;
+
+    ctx.drawImage(
+      image,
+      pixelCrop.x,
+      pixelCrop.y,
+      pixelCrop.width,
+      pixelCrop.height,
+      0,
+      0,
+      pixelCrop.width,
+      pixelCrop.height
+    );
+
+    return canvas.toDataURL('image/jpeg', 0.8);
+  };
+
+  const handleCropSave = async () => {
+    if (!imageToCrop || !croppedAreaPixels) return;
+    setIsCropping(true);
+    try {
+      const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      const compressed = await compressImage(croppedImage, 400, 400, 0.7);
+      setNewItemImage(compressed);
+      setImageToCrop(null);
+    } catch (err) {
+      console.error("Crop failed:", err);
+    } finally {
+      setIsCropping(false);
+    }
+  };
+
+  const compressImage = (base64Str: string, maxWidth: number, maxHeight: number, quality: number): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+    });
+  };
 
   useEffect(() => {
     if (members.length > 0 && !activeMemberId) {
@@ -99,16 +181,16 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 1024 * 1024) {
-      alert('圖片太大囉！請選擇小於 1MB 的圖片。');
+    if (file.size > 2 * 1024 * 1024) {
+      alert('圖片太大囉！請選擇小於 2MB 的圖片。');
       return;
     }
 
-    setIsUploading(true);
     const reader = new FileReader();
     reader.onloadend = () => {
-      setNewItemImage(reader.result as string);
-      setIsUploading(false);
+      setImageToCrop(reader.result as string);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
     };
     reader.readAsDataURL(file);
   };
@@ -124,7 +206,60 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col p-6 overflow-hidden bg-transparent">
+    <>
+      {/* Image Cropper Modal */}
+      <AnimatePresence>
+        {imageToCrop && (
+          <div className="fixed inset-0 z-[300] bg-black flex flex-col">
+            <div className="relative flex-1">
+              <Cropper
+                image={imageToCrop}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                onZoomChange={setZoom}
+              />
+            </div>
+            <div className="bg-slate-900 p-6 pb-10 flex flex-col gap-6">
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">縮放</span>
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  aria-labelledby="Zoom"
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="flex-1 accent-sky-400"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setImageToCrop(null)}
+                  className="flex-1 py-4 bg-white/10 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <X size={18} /> 取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCropSave}
+                  disabled={isCropping}
+                  className="flex-[2] py-4 bg-sky-500 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {isCropping ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} 
+                  確認裁切
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex-1 min-h-0 flex flex-col p-6 overflow-hidden bg-transparent">
       <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center gap-2">
           {theme === 'handdrawn' || theme === 'scrapbook' ? (
@@ -306,13 +441,18 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                 <div>
                   <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block ml-1 mb-1">商品照片</label>
                   <div className="flex items-center gap-3">
-                    <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden flex-shrink-0">
-                      {isUploading ? (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Loader2 size={16} className="animate-spin text-slate-300" />
-                        </div>
-                      ) : newItemImage ? (
-                        <img src={newItemImage} className="w-full h-full object-cover" />
+                    <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden flex-shrink-0 relative group">
+                      {newItemImage ? (
+                        <>
+                          <img src={newItemImage} className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => setNewItemImage(null)}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                          >
+                            <X size={14} />
+                          </button>
+                        </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-slate-200">
                           <ImageIcon size={20} />
@@ -321,7 +461,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                     </div>
                     <label className="flex-1 flex items-center justify-center gap-2 p-3 bg-slate-50 rounded-2xl text-xs font-bold text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors">
                       <Camera size={14} />
-                      <span>上傳照片</span>
+                      <span>{newItemImage ? '更換照片' : '上傳照片'}</span>
                       <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                     </label>
                   </div>
@@ -404,5 +544,6 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 };

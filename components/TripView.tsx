@@ -48,6 +48,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   
   // Cropping state
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [cropMode, setCropMode] = useState<'trip_cover' | 'member_avatar' | null>(null);
+  const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
@@ -89,8 +91,18 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     setIsCropping(true);
     try {
       const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
-      await updateDoc(doc(db, 'trips', tripId), { coverImage: croppedImage });
+      
+      if (cropMode === 'trip_cover') {
+        const compressed = await compressImage(croppedImage, 800, 450, 0.7);
+        await updateDoc(doc(db, 'trips', tripId), { coverImage: compressed });
+      } else if (cropMode === 'member_avatar' && pendingMemberId) {
+        const compressed = await compressImage(croppedImage, 200, 200, 0.7);
+        await updateDoc(doc(db, 'trips', tripId, 'members', pendingMemberId), { avatar: compressed });
+      }
+      
       setImageToCrop(null);
+      setCropMode(null);
+      setPendingMemberId(null);
     } catch (err) {
       console.error("Crop failed:", err);
     } finally {
@@ -417,9 +429,11 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const base64String = reader.result as string;
-      const compressed = await compressImage(base64String, 200, 200, 0.7);
-      await updateDoc(doc(db, 'trips', tripId, 'members', memberId), { avatar: compressed });
+      setCropMode('member_avatar');
+      setPendingMemberId(memberId);
+      setImageToCrop(reader.result as string);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
     };
     reader.readAsDataURL(file);
   };
@@ -429,7 +443,11 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
+      setCropMode('trip_cover');
+      setPendingMemberId(null);
       setImageToCrop(reader.result as string);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
     };
     reader.readAsDataURL(file);
   };
@@ -679,10 +697,10 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
       </main>
 
       {/* Bottom Navigation */}
-      <div className={`fixed bottom-3 left-0 right-0 max-w-md mx-auto px-6 z-[60]`}>
+      <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[60] ${user.profileTheme === 'handdrawn' ? 'px-0 pt-2' : 'px-6 bottom-3'}`}>
         <nav className={`
           ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 
-            'bg-white rounded-2xl flex items-stretch p-1 relative overflow-visible border-[1.5px] border-[#4B3F35]/15 shadow-[0_4px_20px_rgba(75,63,53,0.06)]' : 
+            (user.profileTheme === 'handdrawn' ? 'bg-white/95 backdrop-blur-sm rounded-none border-t-[1.5px] border-b-0 border-r-0 border-l-0' : 'bg-white rounded-2xl border-[1.5px]') + ' flex items-stretch p-1 relative overflow-visible border-[#4B3F35]/15 shadow-[0_-12px_40px_rgba(75,63,53,0.12)]' : 
             user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
             user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
             'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
@@ -704,7 +722,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 image={imageToCrop}
                 crop={crop}
                 zoom={zoom}
-                aspect={16 / 9}
+                aspect={cropMode === 'member_avatar' ? 1 : 16 / 9}
                 onCropChange={setCrop}
                 onCropComplete={onCropComplete}
                 onZoomChange={setZoom}
