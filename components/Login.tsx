@@ -29,8 +29,8 @@ export const Login: React.FC = () => {
         className="w-full max-w-sm text-center"
       >
         <div className="mb-12">
-          <div className="w-32 h-32 mx-auto mb-6 overflow-hidden flex items-center justify-center">
-            <img src="https://cdn.imgchest.com/files/304395563b1e.png" alt="GoGoTrip Icon" className="w-full h-full object-contain" />
+          <div className="w-32 h-32 mx-auto mb-6 flex items-center justify-center">
+            <img src="https://cdn.imgchest.com/files/44520c1f1cd5.png" alt="GoGoTrip Icon" className="w-full h-full object-contain" />
           </div>
 
           <h1 className="text-4xl font-black text-slate-800 tracking-tight mb-2">GoGoTrip</h1>
