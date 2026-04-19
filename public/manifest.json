@@ -12,19 +12,19 @@
   "theme_color": "#FCFBF7",
   "icons": [
     {
-      "src": "https://cdn.imgchest.com/files/6a956b266632.png",
+      "src": "https://cdn.imgchest.com/files/304395563b1e.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://cdn.imgchest.com/files/6a956b266632.png",
+      "src": "https://cdn.imgchest.com/files/304395563b1e.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://cdn.imgchest.com/files/6a956b266632.png",
+      "src": "https://cdn.imgchest.com/files/304395563b1e.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
