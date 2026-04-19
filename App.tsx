@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { MainTab, Trip, UserProfile, Member } from './types';
 import { subscribeToAuth, db } from './services/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, getDocs, limit, addDoc, deleteDoc, arrayUnion, updateDoc, doc, getDoc, setDoc, documentId, startAt, endAt, serverTimestamp } from 'firebase/firestore';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { TripView } from './components/TripView';
@@ -11,7 +11,6 @@ import { BackgroundDoodles } from './components/BackgroundDoodles';
 import { User } from 'firebase/auth';
 import { Home, Map as MapIcon, PlusCircle, User as UserIcon, MapPin, Plus, Compass } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, where, orderBy, onSnapshot, getDocs, limit, addDoc, deleteDoc, arrayUnion, updateDoc } from 'firebase/firestore';
 
 const App: React.FC = () => {
   const navigate = useNavigate();
@@ -50,51 +49,107 @@ const App: React.FC = () => {
 
   // Check if user needs to join the trip
   useEffect(() => {
-    if (joiningTripId && user) {
+    if (joiningTripId && user && !loading) {
+      console.log("Processing join trip for:", joiningTripId);
       const isMember = trips.some(t => t.id === joiningTripId || t.inviteCode?.toUpperCase() === joiningTripId.toUpperCase());
       if (!isMember) {
+        console.log("User is not a member, showing join modal");
         setJoinStep('confirm');
         setShowJoinModal(true);
       } else {
+        console.log("User is already a member, navigating to trip");
         // If already a member, navigate to it
         const trip = trips.find(t => t.id === joiningTripId || t.inviteCode?.toUpperCase() === joiningTripId.toUpperCase());
         if (trip) navigate(`/trip/${trip.id}`);
         setJoiningTripId(null);
       }
     }
-  }, [joiningTripId, user, trips]);
+  }, [joiningTripId, user, trips, loading]);
 
   const fetchPendingTripDetails = async () => {
-    if (!joiningTripId || !user) return;
+    if (!joiningTripId || !user) {
+      console.log("Fetch skipped: joiningTripId or user missing", { joiningTripId, user: !!user });
+      return;
+    }
     setIsJoiningLoading(true);
-    try {
-      let finalTripId = joiningTripId;
-      let tripSnap = await getDoc(doc(db, 'trips', finalTripId));
+    const searchCode = joiningTripId.trim();
+    console.log("--- Starting Deep Search ---");
+    console.log("Search target:", searchCode);
+    console.log("Current user UID:", user.uid);
 
-      if (!tripSnap.exists()) {
-        const q = query(collection(db, 'trips'), where('inviteCode', '==', joiningTripId.toUpperCase()), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          finalTripId = snap.docs[0].id;
-          tripSnap = snap.docs[0];
+    try {
+      // 1. Try fetching by exact Document ID first
+      console.log("Step 1: Fetching by Doc ID...");
+      let tripSnap = await getDoc(doc(db, 'trips', searchCode));
+      let finalTripId: string | null = null;
+
+      if (tripSnap.exists()) {
+        finalTripId = searchCode;
+        console.log("Success: Found by Doc ID");
+      } else {
+        console.log("Doc ID not found, Step 2: Querying inviteCode field...");
+        
+        // Search for exact match
+        const qRaw = query(collection(db, 'trips'), where('inviteCode', '==', searchCode), limit(1));
+        const snapRaw = await getDocs(qRaw);
+        
+        if (!snapRaw.empty) {
+          finalTripId = snapRaw.docs[0].id;
+          tripSnap = snapRaw.docs[0];
+          console.log("Success: Found by raw inviteCode");
+        } else {
+          // Step 3: Try Prefix search (for cases like 7GXZz2IE which is a prefix of the ID)
+          console.log("InviteCode search empty, trying prefix search on Document ID...");
+          const qPrefix = query(
+            collection(db, 'trips'), 
+            orderBy(documentId()), 
+            startAt(searchCode), 
+            endAt(searchCode + '\uf8ff'), 
+            limit(1)
+          );
+          const snapPrefix = await getDocs(qPrefix);
+          
+          if (!snapPrefix.empty) {
+            finalTripId = snapPrefix.docs[0].id;
+            tripSnap = snapPrefix.docs[0];
+            console.log("Success: Found by ID prefix:", finalTripId);
+          } else {
+            // Last Try: uppercase search (our generator uses uppercase)
+            console.log("Prefix search empty, trying uppercase inviteCode...");
+            const qUpper = query(collection(db, 'trips'), where('inviteCode', '==', searchCode.toUpperCase()), limit(1));
+            const snapUpper = await getDocs(qUpper);
+            
+            if (!snapUpper.empty) {
+              finalTripId = snapUpper.docs[0].id;
+              tripSnap = snapUpper.docs[0];
+              console.log("Success: Found by uppercase inviteCode");
+            }
+          }
         }
       }
 
-      if (tripSnap.exists()) {
-        const tripData = { id: tripSnap.id, ...tripSnap.data() } as Trip;
+      if (tripSnap && tripSnap.exists() && finalTripId) {
+        const tripData = { id: finalTripId, ...tripSnap.data() } as Trip;
+        console.log("Trip data retrieved:", tripData.name);
         setPendingTrip(tripData);
         
-        // Fetch members
+        // Fetch members to choose identity
+        console.log("Step 4: Fetching members...");
         const membersSnap = await getDocs(collection(db, 'trips', finalTripId, 'members'));
-        setPendingMembers(membersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Member)));
+        const members = membersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Member));
+        console.log("Members fetched:", members.length);
+        setPendingMembers(members);
         setJoinStep('select');
       } else {
-        alert("找不到此旅程編號，請再確認一次。");
+        console.error("CRITICAL: Trip not found after all attempts");
+        alert(`找不到編號為「${searchCode}」的旅程。\n\n請聯絡建立者確認這是否為正確的「旅程編號」（可以在該旅程的分享頁面中找到，通常為 6 位大寫英數組合）。`);
         setJoiningTripId(null);
         setShowJoinModal(false);
       }
-    } catch (err) {
-      console.error("Fetch trip error:", err);
+    } catch (err: any) {
+      console.error("Join process crashed:", err);
+      const errMsg = err.message || "未知錯誤";
+      alert(`發生錯誤：${errMsg}\n\n這可能是網路連線問題，請稍後再試。`);
     } finally {
       setIsJoiningLoading(false);
     }
