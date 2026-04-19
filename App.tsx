@@ -345,7 +345,7 @@ const App: React.FC = () => {
       return (
         <div className="min-h-screen bg-[#FCFBF7] flex flex-col items-center justify-center">
           <div className="w-24 h-24 flex items-center justify-center mb-12">
-            <img src="/trippic.png" alt="Logo" className="w-full h-full object-contain" />
+            <img src="https://cdn.imgchest.com/files/6a956b266632.png" alt="Logo" className="w-full h-full object-contain" />
           </div>
           <div className="w-8 h-8 border-[3px] border-slate-200 border-t-sky-400 rounded-full animate-spin"></div>
         </div>

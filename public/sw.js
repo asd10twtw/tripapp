@@ -1,33 +1,41 @@
 
-const CACHE_NAME = 'gogotrip';
+const CACHE_NAME = 'gogotrip-v2';
 const ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/trippic.png',
-  '/a1.png',
-  '/a2.png',
-  '/s1.png',
-  '/s2.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // 使用個別添加，防止其中一個失敗導致全部失敗
       return Promise.allSettled(
         ASSETS.map(asset => cache.add(asset))
       );
     })
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
-  );
+  // Network-first for HTML, Cache-first for others
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+  } else {
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        return response || fetch(event.request);
+      })
+    );
+  }
 });
 
 // 清除舊快取

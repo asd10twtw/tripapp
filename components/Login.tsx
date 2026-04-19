@@ -13,10 +13,10 @@ export const Login: React.FC = () => {
       >
         <div className="mb-12">
           <div className="w-24 h-24 mx-auto mb-6 overflow-hidden flex items-center justify-center">
-            <img src="/trippic.png" alt="GoGoTrip Icon" className="w-full h-full object-contain" />
+            <img src="https://cdn.imgchest.com/files/304395563b1e.png" alt="GoGoTrip Icon" className="w-full h-full object-contain" />
           </div>
 
-          <h1 className="text-4xl font-black text-slate-800 tracking-tight mb-2">GoGoTrip</h1>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">GoGoTrip</h1>
         </div>
 
         <button 

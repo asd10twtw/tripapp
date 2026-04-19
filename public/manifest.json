@@ -12,19 +12,19 @@
   "theme_color": "#FCFBF7",
   "icons": [
     {
-      "src": "/trippic.png",
+      "src": "https://cdn.imgchest.com/files/6a956b266632.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/trippic.png",
+      "src": "https://cdn.imgchest.com/files/6a956b266632.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/trippic.png",
+      "src": "https://cdn.imgchest.com/files/6a956b266632.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
