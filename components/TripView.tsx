@@ -102,6 +102,136 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     setIsQrModalOpen(true);
   };
 
+  const [orphans, setOrphans] = useState<string[]>([]);
+  const [isSearchingOrphans, setIsSearchingOrphans] = useState(false);
+  const [isRescuing, setIsRescuing] = useState(false);
+  const [rescueSelections, setRescueSelections] = useState<Record<string, string>>({});
+
+  const scanForOrphans = async () => {
+    setIsSearchingOrphans(true);
+    try {
+      const collections = ['expenses', 'todos', 'journal', 'pretrip_tasks'];
+      const foundOrphans = new Set<string>();
+      const currentMemberIds = new Set<string>();
+      members.forEach(m => {
+        currentMemberIds.add(m.id);
+        if (m.legacyIds) {
+          m.legacyIds.forEach(lId => currentMemberIds.add(lId));
+        }
+      });
+      
+      for (const colName of collections) {
+        const snap = await getDocs(collection(db, 'trips', tripId, colName));
+        for (const d of snap.docs) {
+          const data = d.data();
+          let idsToCheck: string[] = [];
+          
+          if (colName === 'expenses') {
+            idsToCheck.push(data.payerId);
+            if (data.splitWithIds) idsToCheck.push(...data.splitWithIds);
+            if (data.customSplits) idsToCheck.push(...Object.keys(data.customSplits));
+          } else if (colName === 'todos') {
+            idsToCheck.push(data.ownerId);
+          } else if (colName === 'journal') {
+            idsToCheck.push(data.authorId);
+          } else if (colName === 'pretrip_tasks') {
+            if (data.completedBy) idsToCheck.push(...data.completedBy);
+          }
+
+          idsToCheck.forEach(id => {
+            if (id && typeof id === 'string' && !currentMemberIds.has(id)) {
+              // Only exclude common system values or known good formats if needed
+              // But for safety, catch anything that looks like a UID or legacy ID
+              if (id.length > 5 || id.startsWith('m') || id.startsWith('temp')) {
+                foundOrphans.add(id);
+              }
+            }
+          });
+        }
+      }
+      setOrphans(Array.from(foundOrphans));
+    } catch (err) {
+      console.error("Scan failed:", err);
+    } finally {
+      setIsSearchingOrphans(false);
+    }
+  };
+
+  const rescueOrphans = async (orphanId: string, targetMemberId: string) => {
+    if (!targetMemberId || isRescuing) return;
+    const targetName = members.find(m => m.id === targetMemberId)?.name || '該旅伴';
+    
+    setIsRescuing(true);
+    try {
+      // 1. Virtual Sync: Update Member document to include legacyId in array
+      await updateDoc(doc(db, 'trips', tripId, 'members', targetMemberId), {
+        legacyIds: arrayUnion(orphanId)
+      });
+
+      // 2. Physical Migration (Background Batch)
+      const collections = ['expenses', 'todos', 'journal', 'pretrip_tasks'];
+      let migratedCount = 0;
+
+      for (const colName of collections) {
+        const snap = await getDocs(collection(db, 'trips', tripId, colName));
+        const batch = writeBatch(db);
+        let batchSize = 0;
+
+        for (const d of snap.docs) {
+          const data = d.data();
+          let updated = false;
+          const newData = { ...data };
+
+          if (colName === 'expenses') {
+            if (data.payerId === orphanId) { newData.payerId = targetMemberId; updated = true; }
+            if (data.splitWithIds?.includes(orphanId)) {
+              newData.splitWithIds = data.splitWithIds.map((id: string) => id === orphanId ? targetMemberId : id);
+              updated = true;
+            }
+            if (data.customSplits && data.customSplits[orphanId] !== undefined) {
+              newData.customSplits[targetMemberId] = data.customSplits[orphanId];
+              delete newData.customSplits[orphanId];
+              updated = true;
+            }
+          } else if (colName === 'todos') {
+            if (data.ownerId === orphanId) { newData.ownerId = targetMemberId; updated = true; }
+          } else if (colName === 'journal') {
+            if (data.authorId === orphanId) { newData.authorId = targetMemberId; updated = true; }
+          } else if (colName === 'pretrip_tasks') {
+            if (data.completedBy?.includes(orphanId)) {
+              newData.completedBy = data.completedBy.map((id: string) => id === orphanId ? targetMemberId : id);
+              updated = true;
+            }
+          }
+
+          if (updated) {
+            batch.update(doc(db, 'trips', tripId, colName, d.id), newData);
+            batchSize++;
+            migratedCount++;
+            
+            if (batchSize >= 450) { // Batch limit is 500
+              await batch.commit();
+              batchSize = 0;
+            }
+          }
+        }
+        if (batchSize > 0) {
+          await batch.commit();
+        }
+      }
+      
+      setOrphans(prev => prev.filter(id => id !== orphanId));
+      
+      const summary = `🎉 修復完成！\n-------------------\n總計處理了 ${migratedCount} 筆遺失記錄。\n資料已歸還給：${targetName}\n\n請切換分頁或重新整理，資料將會出現在畫面上。`;
+      alert(summary);
+    } catch (err) {
+      console.error("Rescue failed:", err);
+      alert(`修復失敗：${err instanceof Error ? err.message : '未知錯誤'}`);
+    } finally {
+      setIsRescuing(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setIsCopied(true);
@@ -150,6 +280,14 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   }, [tripId]);
 
   const handleClaimIdentity = async (placeholderId: string) => {
+    if (placeholderId !== 'new') {
+      const isPlaceholder = placeholderId.startsWith('temp') || placeholderId.startsWith('m');
+      if (!isPlaceholder) {
+        alert("此身份已被其他真實使用者使用，無法認領。");
+        setShowClaimModal(false);
+        return;
+      }
+    }
     setIsClaiming(true);
     try {
       let newMember;
@@ -173,7 +311,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
           ...placeholder,
           id: user.uid,
           name: user.displayName || placeholder.name,
-          avatar: finalAvatar
+          avatar: finalAvatar,
+          legacyIds: [placeholderId]
         };
       }
       
@@ -626,7 +765,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
               </div>
 
               <div className="space-y-3 max-h-[320px] overflow-y-auto no-scrollbar pr-1">
-                {members.filter(m => m.id.startsWith('m')).map(m => (
+                {members.filter(m => m.id.startsWith('m') || m.id.startsWith('temp')).map(m => (
                   <button
                     key={m.id}
                     disabled={isClaiming}
@@ -771,13 +910,68 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 block">成員名單</label>
-                    <button 
-                      onClick={() => setIsAddMemberModalOpen(true)} 
-                      className="text-[10px] font-black text-sky-500 uppercase tracking-widest flex items-center gap-1"
-                    >
-                      <UserPlus size={12} /> 新增成員
-                    </button>
+                    <div className="flex gap-4">
+                      <button 
+                        onClick={scanForOrphans}
+                        disabled={isSearchingOrphans}
+                        className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1 hover:underline disabled:opacity-50"
+                      >
+                        {isSearchingOrphans ? '掃描中...' : '資料修復'}
+                      </button>
+                      <button 
+                        onClick={() => setIsAddMemberModalOpen(true)} 
+                        className="text-[10px] font-black text-sky-500 uppercase tracking-widest flex items-center gap-1"
+                      >
+                        <UserPlus size={12} /> 新增成員
+                      </button>
+                    </div>
                   </div>
+
+                  {orphans.length > 0 && (
+                    <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100 animate-in fade-in slide-in-from-top-2">
+                        <h5 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">偵測到遺失的資料</h5>
+                        <p className="text-[9px] text-amber-500 font-bold mb-3 leading-tight">有部分資料屬於舊的身份 (ID: {orphans.join(', ')})，請點擊「執行修復」歸還給正確的旅伴：</p>
+                        <div className="space-y-3">
+                          {orphans.map(oid => (
+                            <div key={oid} className="p-3 bg-white rounded-2xl shadow-sm border border-amber-100/50">
+                               <div className="flex items-center justify-between mb-2">
+                                 <span className="text-[10px] font-black text-amber-600 bg-amber-100/50 px-2 py-0.5 rounded-full">遺失 ID: {oid}</span>
+                                 {isRescuing && <Loader2 size={12} className="animate-spin text-amber-500" />}
+                               </div>
+                               <div className="flex gap-2">
+                                 <select 
+                                   value={rescueSelections[oid] || ''}
+                                   onChange={(e) => setRescueSelections(prev => ({ ...prev, [oid]: e.target.value }))}
+                                   className="flex-1 p-2 bg-slate-50 rounded-xl text-[10px] font-black border-none outline-none focus:ring-1 ring-amber-200"
+                                 >
+                                    <option value="">選擇接收資料的旅伴...</option>
+                                    {members.map(m => (
+                                      <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))}
+                                 </select>
+                                 <button
+                                   onClick={() => {
+                                     const targetId = rescueSelections[oid];
+                                     if (targetId) rescueOrphans(oid, targetId);
+                                     else alert("請先選擇一位旅伴！");
+                                   }}
+                                   disabled={isRescuing || !rescueSelections[oid]}
+                                   className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-sm active:scale-95 disabled:bg-slate-200 disabled:text-slate-400 transition-all flex items-center gap-2 min-w-[80px] justify-center"
+                                 >
+                                   {isRescuing ? (
+                                     <>
+                                       <Loader2 size={12} className="animate-spin" />
+                                       修復中
+                                     </>
+                                   ) : '執行修復'}
+                                 </button>
+                               </div>
+                            </div>
+                          ))}
+                        </div>
+                    </div>
+                  )}
+
                   <div className="space-y-3">
                     {members.map(m => (
                       <div key={m.id} className={`flex items-center gap-4 p-3 ${user.profileTheme === 'handdrawn' ? '' : 'bg-slate-50 rounded-2xl border border-slate-100'}`}>

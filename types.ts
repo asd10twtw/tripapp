@@ -30,6 +30,7 @@ export interface Member {
   name: string;
   color: string;
   avatar: string;
+  legacyIds?: string[]; // Original placeholder IDs for data mapping
 }
 
 export enum Tab {

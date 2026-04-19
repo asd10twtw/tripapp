@@ -28,14 +28,29 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, theme
   useEffect(() => {
     const q = query(collection(db, 'trips', tripId, 'journal'), orderBy('date', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedEntries: JournalEntry[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as JournalEntry));
+      const fetchedEntries: JournalEntry[] = snapshot.docs.map(doc => {
+        const data = doc.data() as any;
+        
+        // Dynamic Legacy ID Mapping
+        members.forEach(m => {
+          if (m.legacyIds && m.legacyIds.length > 0) {
+            m.legacyIds.forEach(lId => {
+              if (data.authorId === lId) {
+                data.authorId = m.id;
+              }
+            });
+          }
+        });
+
+        return {
+          id: doc.id,
+          ...data
+        } as JournalEntry;
+      });
       setEntries(fetchedEntries);
     });
     return () => unsubscribe();
-  }, [tripId]);
+  }, [tripId, members]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

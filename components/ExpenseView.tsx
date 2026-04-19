@@ -124,18 +124,23 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => {
         const data = doc.data() as any;
-        // Normalize legacy IDs: Map m2 to current user UID
-        if (data.payerId === 'm2') data.payerId = currentUser.uid;
-        if (data.splitWithIds) {
-          data.splitWithIds = data.splitWithIds.map((id: string) => id === 'm2' ? currentUser.uid : id);
-        }
-        if (data.customSplits) {
-          const newSplits: Record<string, number> = {};
-          Object.entries(data.customSplits).forEach(([id, val]) => {
-            newSplits[id === 'm2' ? currentUser.uid : id] = val as number;
-          });
-          data.customSplits = newSplits;
-        }
+        
+        // Dynamic Legacy ID Mapping
+        members.forEach(m => {
+          if (m.legacyIds && m.legacyIds.length > 0) {
+            m.legacyIds.forEach(lId => {
+              if (data.payerId === lId) data.payerId = m.id;
+              if (data.splitWithIds) {
+                data.splitWithIds = data.splitWithIds.map((id: string) => id === lId ? m.id : id);
+              }
+              if (data.customSplits && data.customSplits[lId] !== undefined) {
+                data.customSplits[m.id] = data.customSplits[lId];
+                delete data.customSplits[lId];
+              }
+            });
+          }
+        });
+
         return { id: doc.id, ...data } as Expense;
       });
       fetched.sort((a, b) => {
@@ -145,7 +150,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
       setExpenses(fetched);
     });
     return () => unsubscribe();
-  }, [tripId]);
+  }, [tripId, members]);
 
   const allCategories = { ...CATEGORY_ICONS, ...customCategories };
 

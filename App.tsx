@@ -166,6 +166,13 @@ const App: React.FC = () => {
 
       // 2. Handle member record
       if (memberId && memberId !== 'new') {
+        const isPlaceholder = memberId.startsWith('m') || memberId.startsWith('temp');
+        if (!isPlaceholder) {
+          console.error("Security: Attempted to claim a non-placeholder member ID");
+          alert("此身份已被其他真實使用者使用，無法認領。");
+          return;
+        }
+
         // Link existing record to this UID
         const memberRef = doc(db, 'trips', pendingTrip.id, 'members', memberId);
         const memberSnap = await getDoc(memberRef);
@@ -176,10 +183,55 @@ const App: React.FC = () => {
             ...data,
             id: user.uid,
             name: user.displayName || data.name,
-            avatar: user.photoURL || data.avatar
+            avatar: user.photoURL || data.avatar,
+            legacyIds: [memberId] // Save for data rescue if needed
           });
           if (memberId !== user.uid) {
             await deleteDoc(memberRef);
+          }
+
+          // Migrate all data associated with placeholder ID (memberId) to user.uid
+          const collectionsToMigrate = ['expenses', 'todos', 'journal', 'pretrip_tasks'];
+          
+          for (const colName of collectionsToMigrate) {
+            try {
+              const colRef = collection(db, 'trips', pendingTrip.id, colName);
+              const snap = await getDocs(colRef);
+              
+              for (const d of snap.docs) {
+                const data = d.data();
+                let updated = false;
+                const newData = { ...data };
+
+                if (colName === 'expenses') {
+                  if (data.payerId === memberId) { newData.payerId = user.uid; updated = true; }
+                  if (data.splitWithIds?.includes(memberId)) {
+                    newData.splitWithIds = data.splitWithIds.map((id: string) => id === memberId ? user.uid : id);
+                    updated = true;
+                  }
+                  if (data.customSplits && data.customSplits[memberId] !== undefined) {
+                    newData.customSplits[user.uid] = data.customSplits[memberId];
+                    delete newData.customSplits[memberId];
+                    updated = true;
+                  }
+                } else if (colName === 'todos') {
+                  if (data.ownerId === memberId) { newData.ownerId = user.uid; updated = true; }
+                } else if (colName === 'journal') {
+                  if (data.authorId === memberId) { newData.authorId = user.uid; updated = true; }
+                } else if (colName === 'pretrip_tasks') {
+                  if (data.completedBy?.includes(memberId)) {
+                    newData.completedBy = data.completedBy.map((id: string) => id === memberId ? user.uid : id);
+                    updated = true;
+                  }
+                }
+
+                if (updated) {
+                  await updateDoc(doc(db, 'trips', pendingTrip.id, colName, d.id), newData);
+                }
+              }
+            } catch (err) {
+              console.warn(`Failed to migrate collection ${colName}:`, err);
+            }
           }
         }
       } else {
@@ -491,8 +543,8 @@ const App: React.FC = () => {
                   <p className="text-slate-400 text-xs font-bold mb-6">請選擇您在旅程中的預設身份，或新增自己為新成員。</p>
                   
                   <div className="space-y-3 max-h-[300px] overflow-y-auto no-scrollbar mb-8">
-                    {/* Only show members who aren't already linked to a real user UID (or show all if they want to override) */}
-                    {pendingMembers.map(m => (
+                    {/* Only show members who aren't already linked to a real user UID (placeholders) */}
+                    {pendingMembers.filter(m => m.id.startsWith('temp') || m.id.startsWith('m')).map(m => (
                       <button
                         key={m.id}
                         onClick={() => handleJoinTripAs(m.id)}

@@ -156,10 +156,25 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
   useEffect(() => {
     const q = query(collection(db, 'trips', tripId, 'pretrip_tasks'), orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPreTripTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreTripTask)));
+      setPreTripTasks(snapshot.docs.map(doc => {
+        const data = doc.data() as any;
+        
+        // Dynamic Legacy ID Mapping
+        members.forEach(m => {
+          if (m.legacyIds && m.legacyIds.length > 0) {
+            m.legacyIds.forEach(lId => {
+              if (data.completedBy?.includes(lId)) {
+                data.completedBy = data.completedBy.map((id: string) => id === lId ? m.id : id);
+              }
+            });
+          }
+        });
+
+        return { id: doc.id, ...data } as PreTripTask;
+      }));
     });
     return () => unsubscribe();
-  }, [tripId]);
+  }, [tripId, members]);
 
   const handleAddPreTripTask = async (e: React.FormEvent) => {
       e.preventDefault();

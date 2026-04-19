@@ -37,13 +37,23 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setTodos(snapshot.docs.map(doc => {
         const data = doc.data() as any;
-        // Normalize legacy IDs: Map m2 to current user UID
-        if (data.ownerId === 'm2') data.ownerId = currentUser.uid;
+        
+        // Dynamic Legacy ID Mapping
+        members.forEach(m => {
+          if (m.legacyIds && m.legacyIds.length > 0) {
+            m.legacyIds.forEach(lId => {
+              if (data.ownerId === lId) {
+                data.ownerId = m.id;
+              }
+            });
+          }
+        });
+
         return { id: doc.id, ...data } as TodoItem;
       }));
     });
     return () => unsubscribe();
-  }, [tripId, currentUser.uid]);
+  }, [tripId, members]);
 
   const activeMember = members.find(m => m.id === activeMemberId);
   // Be more flexible with legacy data: include items with missing type or different ownerId if they match the current member

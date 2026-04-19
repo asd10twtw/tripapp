@@ -28,10 +28,16 @@ export const loginWithGoogle = async () => {
       await setDoc(userRef, profile);
     }
     return user;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login failed:", error);
+    
+    // Silence the popup closed by user error as it's common and noisy
+    if (error.code === 'auth/popup-closed-by-user') {
+      return null;
+    }
+    
     if (error instanceof Error) {
-      alert("登入失敗: " + error.message + "\n請確認是否已在 Firebase 控制台將此網域加入「授權網域」。");
+      alert("登入失敗: " + error.message + "\n\n提示：請確保您的瀏覽器允許彈出視窗，或嘗試點擊右上角的「在新視窗開啟」後再試一次。");
     }
     throw error;
   }
