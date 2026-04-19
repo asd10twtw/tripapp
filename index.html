@@ -25,6 +25,16 @@
     <script type="module" src="/index.tsx"></script>
 </head>
   <body>
-    <div id="root"></div>
-</body>
+    <div id="root">
+      <div style="font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; color: #94a3b8; background-color: #FCFBF7;">
+        <div style="text-align: center;">
+          <div style="width: 32px; height: 32px; border: 3px solid #e2e8f0; border-top-color: #3D74B6; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px;"></div>
+          <p style="font-size: 14px; font-weight: 600;">載入中...</p>
+        </div>
+      </div>
+      <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+      </style>
+    </div>
+  </body>
 </html>
