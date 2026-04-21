@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gogotrip-v4';
+const CACHE_NAME = 'gogotrip-v5';
 const ASSETS = [
   '/',
   '/index.html',

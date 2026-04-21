@@ -12,16 +12,16 @@
   "theme_color": "#FCFBF7",
   "icons": [
     {
-      "src": "https://i.ibb.co/Y7bFp8jC/trippic.png?v=2",
+      "src": "https://i.ibb.co/Y7bFp8jC/trippic.png?v=3",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "https://i.ibb.co/Y7bFp8jC/trippic.png?v=2",
+      "src": "https://i.ibb.co/Y7bFp8jC/trippic.png?v=3",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }
