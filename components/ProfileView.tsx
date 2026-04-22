@@ -4,7 +4,7 @@ import { UserProfile, Trip, Expense } from '../types';
 import { Settings, Bell, Moon, LogOut, ChevronRight, Award, Calendar, MapPin, Github, Pencil, X, Image as ImageIcon, Loader2, Check, Scissors, Wallet, Clock, Heart, Star, Sparkles, Compass, Plane, Tent, Ticket, Camera, Footprints, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { logout } from '../services/firebase';
-import { doc, updateDoc, collection, getDocs, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, getDocs, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import Cropper from 'react-easy-crop';
 import { useCallback } from 'react';
@@ -233,7 +233,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
   };
 
   const handleProfileThemeSelect = async (themeId: 'minimalist' | 'hipster' | 'handdrawn') => {
-    const updates: any = { profileTheme: themeId };
+    const updates: any = { 
+      profileTheme: themeId,
+      updatedAt: serverTimestamp()
+    };
     
     // Automatically set a suitable color based on theme
     if (themeId === 'hipster') {
@@ -268,8 +271,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
     switch (user.profileTheme) {
       case 'hipster':
         return {
-          container: 'bg-[#FDFCF8]',
-          header: 'bg-[#FDFCF8] border-b border-stone-100',
+          container: 'bg-transparent',
+          header: 'bg-transparent border-b border-stone-100',
           card: 'bg-white rounded-none border border-stone-100 shadow-sm',
           font: 'font-hipster',
           accent: 'text-stone-400',
@@ -279,18 +282,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
       case 'handdrawn':
         return {
           container: 'bg-transparent',
-          header: 'bg-[#F9F5E6]/80 backdrop-blur-sm border-b border-[#4B3F35]/10',
+          header: 'bg-transparent border-b border-[#4B3F35]/10',
           card: 'bg-white border-[1.5px] border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.03)]',
           font: 'font-handdrawn',
-          accent: 'text-[#8B5E3C]',
-          badge: 'bg-[#FDFCF8] text-[#8B5E3C] border border-[#4B3F35]/10 rounded-none px-2 py-0.5 text-[9px]',
-          brandColor: '#8B5E3C'
+          accent: '', // Will use inline style or brand classes
+          badge: 'bg-[#FDFCF8] border border-[#4B3F35]/10 rounded-none px-2 py-0.5 text-[9px]',
+          brandColor: 'var(--brand-color)'
         };
       case 'minimalist':
       default:
         return {
-          container: 'bg-[#F8FAFC]',
-          header: 'bg-[#F8FAFC] border-b border-slate-200/50',
+          container: 'bg-transparent',
+          header: 'bg-transparent border-b border-slate-200/50',
           card: 'bg-white rounded-[32px] border border-slate-100 shadow-soft',
           font: 'font-sans',
           accent: 'text-slate-400',
@@ -308,8 +311,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
         photoURL: editPhoto,
         motto: editMotto,
         location: editLocation,
-        interests: editInterests.split(/[\/]+/).map(s => s.trim()).filter(Boolean)
+        interests: editInterests.split(/[\/]+/).map(s => s.trim()).filter(Boolean),
+        updatedAt: serverTimestamp()
       });
+
+      // Sync to all trips where user is a member
+      const memberUpdates = trips
+        .filter(t => t.memberUids?.includes(user.uid))
+        .map(async (trip) => {
+          try {
+            const memberDocRef = doc(db, 'trips', trip.id, 'members', user.uid);
+            // Check if member document exists before updating
+            const memberSnap = await getDoc(memberDocRef);
+            if (memberSnap.exists()) {
+              await updateDoc(memberDocRef, {
+                name: editName,
+                avatar: editPhoto,
+                updatedAt: serverTimestamp()
+              });
+            }
+          } catch (err) {
+            console.error(`Failed to sync member data for trip ${trip.id}:`, err);
+          }
+        });
+      
+      await Promise.all(memberUpdates);
+
       setIsEditingProfile(false);
     } catch (err) {
       console.error('Failed to update profile:', err);
@@ -319,7 +346,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
   const handleColorSelect = async (color: string) => {
     try {
       await updateDoc(doc(db, 'users', user.uid), {
-        themeColor: color
+        themeColor: color,
+        updatedAt: serverTimestamp()
       });
     } catch (err) {
       console.error('Failed to update theme color:', err);
@@ -336,7 +364,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
           await updateDoc(doc(db, 'users', user.uid), {
             githubId: ghData.id,
             githubUsername: ghData.login,
-            githubUrl: ghData.html_url
+            githubUrl: ghData.html_url,
+            updatedAt: serverTimestamp()
           });
           alert(`成功連結 GitHub 帳號: ${ghData.login}`);
         } catch (err) {
@@ -368,7 +397,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
           animate={{ opacity: 1, y: 0 }}
           className={`relative transition-all duration-500 ${styles.card} ${
             user.profileTheme === 'handdrawn' ? 'rotate-[0.5deg] p-6 pb-8' : 
-            user.profileTheme === 'hipster' ? 'rounded-none border border-stone-200 !p-8 bg-[#FDFCF8] shadow-sm' :
+            user.profileTheme === 'hipster' ? 'rounded-none border border-stone-200 !p-8 bg-white shadow-sm' :
             'rounded-[32px] p-6'
           }`}
         >
@@ -382,15 +411,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                 <svg className="w-full h-full" viewBox="0 0 400 200" preserveAspectRatio="none" fill="none">
                   <path 
                     d="M30,160 C100,160 150,40 200,40 S300,140 370,140" 
-                    stroke="#8B5E3C" 
+                    stroke="var(--brand-color)" 
                     strokeWidth="2.5" 
                     strokeDasharray="6 6" 
                     strokeLinecap="round"
                     className="opacity-40"
                   />
-                  <circle cx="30" cy="160" r="3.5" fill="#8B5E3C" />
+                  <circle cx="30" cy="160" r="3.5" fill="var(--brand-color)" />
                   <g transform="translate(358, 118) scale(0.65)">
-                    <Flag size={24} fill="#8B5E3C" stroke="#8B5E3C" />
+                    <Flag size={24} fill="var(--brand-color)" stroke="var(--brand-color)" />
                   </g>
                 </svg>
               </div>
@@ -485,10 +514,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
               
               {user.location && (
                 <div className={`flex items-center gap-1 mt-1 font-bold ${
-                  user.profileTheme === 'handdrawn' ? 'text-[#8B5E3C] text-[10px] justify-start font-handdrawn' : 
+                  user.profileTheme === 'handdrawn' ? 'text-[10px] justify-start font-handdrawn' : 
                   user.profileTheme === 'hipster' ? 'text-stone-400 text-[8px] font-hipster tracking-[0.2em] uppercase' :
                   'text-slate-400 text-[10px]'
-                }`}>
+                }`} style={user.profileTheme === 'handdrawn' ? { color: 'var(--brand-color)' } : {}}>
                   <MapPin size={user.profileTheme === 'hipster' ? 10 : 9} />
                   <span className={user.profileTheme === 'handdrawn' ? 'tracking-[0.1em]' : ''}>{user.location}</span>
                 </div>
@@ -589,10 +618,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
               }`}
             >
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                user.profileTheme === 'handdrawn' ? 'bg-[#EEE8D5] text-[#8B5E3C]' : 
-                user.profileTheme === 'hipster' ? 'bg-stone-100 text-stone-500 rounded-full' :
-                'bg-slate-50 text-amber-500'
-              }`}>
+                user.profileTheme === 'hipster' ? 'rounded-full' : ''
+              }`} style={{ backgroundColor: 'rgba(var(--brand-color-rgb), 0.15)', color: 'var(--brand-color)' }}>
                 <Award size={16} />
               </div>
               <div className="flex-1 text-left">
@@ -627,18 +654,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className={`overflow-hidden px-4 pb-4 ${
-                    user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6]' : 
-                    user.profileTheme === 'hipster' ? 'bg-[#FDFCF8]' :
-                    'bg-slate-50/50'
-                  }`}
+                  className="overflow-hidden px-4 pb-4 border-t border-slate-50 shadow-inner"
+                  style={user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' 
+                    ? { backgroundColor: 'rgba(var(--brand-color-rgb), 0.08)' } 
+                    : { backgroundColor: '#ffffff' }
+                  }
                 >
                   <div className="grid grid-cols-3 gap-3 pt-2">
                     {profileThemes.map((theme) => (
                       <button
                         key={theme.id}
                         onClick={() => handleProfileThemeSelect(theme.id)}
-                        className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all ${user.profileTheme === theme.id || (!user.profileTheme && theme.id === 'minimalist') ? (user.profileTheme === 'handdrawn' ? 'bg-white shadow-sm ring-1 ring-[#8B5E3C]/20' : user.profileTheme === 'hipster' ? 'bg-white shadow-sm ring-1 ring-stone-200' : 'bg-white shadow-sm ring-1 ring-slate-200') : 'hover:bg-white/50'}`}
+                        className={`flex flex-col items-center gap-2 p-3 rounded-2xl transition-all border-2 ${user.profileTheme === theme.id || (!user.profileTheme && theme.id === 'minimalist') ? 'shadow-sm' : 'hover:bg-slate-50 border-transparent'}`}
+                        style={(user.profileTheme === theme.id || (!user.profileTheme && theme.id === 'minimalist')) ? { borderColor: 'var(--brand-color)', backgroundColor: 'rgba(var(--brand-color-rgb), 0.05)' } : {}}
                       >
                         <span className="text-xl">{theme.icon}</span>
                         <span className={`text-[10px] font-black text-slate-600 ${user.profileTheme === 'hipster' ? 'font-hipster' : ''}`}>{theme.name}</span>
@@ -661,10 +689,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
               }`}
             >
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                user.profileTheme === 'handdrawn' ? 'bg-[#EEE8D5] text-[#268BD2]' : 
-                user.profileTheme === 'hipster' ? 'bg-stone-100 text-stone-400 rounded-full' :
-                'bg-slate-50 text-indigo-400'
-              }`}>
+                user.profileTheme === 'hipster' ? 'rounded-full' : ''
+              }`}
+              style={{ backgroundColor: 'rgba(var(--brand-color-rgb), 0.15)', color: 'var(--brand-color)' }}
+              >
                 <Moon size={16} />
               </div>
               <div className="flex-1 text-left">
@@ -696,18 +724,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className={`overflow-hidden px-4 pb-4 ${
-                    user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6]' : 
-                    user.profileTheme === 'hipster' ? 'bg-[#FDFCF8]' :
-                    'bg-slate-50/50'
-                  }`}
+                  className="overflow-hidden px-4 pb-4 border-t border-slate-50 shadow-inner"
+                  style={user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' 
+                    ? { backgroundColor: 'rgba(var(--brand-color-rgb), 0.08)' } 
+                    : { backgroundColor: '#ffffff' }
+                  }
                 >
                   <div className="grid grid-cols-4 gap-3 pt-2">
                     {themeColors.map((color) => (
                       <button
                         key={color.value}
                         onClick={() => handleColorSelect(color.value)}
-                        className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all ${user.themeColor === color.value || (!user.themeColor && color.value === '#3D74B6') ? (user.profileTheme === 'handdrawn' ? 'bg-white shadow-sm ring-1 ring-[#8B5E3C]/20' : user.profileTheme === 'hipster' ? 'bg-white shadow-sm ring-1 ring-stone-200' : 'bg-white shadow-sm ring-1') : 'hover:bg-white/50'}`}
+                        className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all border-2 ${user.themeColor === color.value || (!user.themeColor && color.value === '#3D74B6') ? 'shadow-sm' : 'hover:bg-slate-50 border-transparent'}`}
+                        style={(user.themeColor === color.value || (!user.themeColor && color.value === '#3D74B6')) ? { borderColor: 'var(--brand-color)', backgroundColor: 'rgba(var(--brand-color-rgb), 0.05)' } : {}}
                       >
                         <div className="w-6 h-6 rounded-full shadow-sm" style={{ backgroundColor: color.value }} />
                         <span className={`text-[8px] font-bold ${user.profileTheme === 'handdrawn' ? 'text-stone-500' : user.profileTheme === 'hipster' ? 'text-stone-500 font-hipster' : 'text-slate-500'}`}>{color.name}</span>
@@ -746,7 +775,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                     type="text" 
                     value={editName}
                     onChange={e => setEditName(e.target.value)}
-                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-1"
+                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2"
+                    style={{ '--tw-ring-color': 'rgba(var(--brand-color-rgb), 0.3)' } as React.CSSProperties}
                   />
                 </div>
                 <div>
@@ -756,7 +786,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                     value={editMotto}
                     onChange={e => setEditMotto(e.target.value)}
                     placeholder="例如：慢行，是最美的風景"
-                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-1"
+                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2"
+                    style={{ '--tw-ring-color': 'rgba(var(--brand-color-rgb), 0.3)' } as React.CSSProperties}
                   />
                 </div>
                 <div>
@@ -766,7 +797,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                     value={editLocation}
                     onChange={e => setEditLocation(e.target.value)}
                     placeholder="例如：台北+首爾+東京"
-                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-1"
+                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2"
+                    style={{ '--tw-ring-color': 'rgba(var(--brand-color-rgb), 0.3)' } as React.CSSProperties}
                   />
                 </div>
                 <div>
@@ -776,7 +808,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                     value={editInterests}
                     onChange={e => setEditInterests(e.target.value)}
                     placeholder="例如：咖啡/攝影/慢跑"
-                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-1"
+                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2"
+                    style={{ '--tw-ring-color': 'rgba(var(--brand-color-rgb), 0.3)' } as React.CSSProperties}
                   />
                 </div>
                 <div>
@@ -829,7 +862,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                 onZoomChange={setZoom}
               />
             </div>
-            <div className="bg-slate-900 p-6 pb-10 flex flex-col gap-6">
+            <div className="bg-slate-900 p-6 pb-32 flex flex-col gap-6">
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">縮放</span>
                 <input
@@ -906,10 +939,10 @@ const StatCard: React.FC<{ icon: React.ReactNode, value: string | number, label:
         'text-slate-800'
       }`}>{value}</div>
       <div className={`text-[8px] font-bold uppercase tracking-normal ${
-        theme === 'handdrawn' ? 'text-[#8B5E3C]' : 
+        theme === 'handdrawn' ? '' : 
         theme === 'hipster' ? 'text-stone-400 font-hipster' : 
         'text-slate-400'
-      }`}>{label}</div>
+      }`} style={theme === 'handdrawn' ? { color: 'var(--brand-color)' } : {}}>{label}</div>
     </div>
   );
 };
@@ -940,10 +973,10 @@ const SettingItem: React.FC<{ icon: React.ReactNode, label: string, subLabel: st
           'text-slate-800'
         }`}>{label}</p>
         <p className={`text-[9px] font-bold ${
-          theme === 'handdrawn' ? 'text-[#8B5E3C]' : 
+          theme === 'handdrawn' ? '' : 
           theme === 'hipster' ? 'text-stone-400 font-hipster' :
           'text-slate-400'
-        }`}>{subLabel}</p>
+        }`} style={theme === 'handdrawn' ? { color: 'var(--brand-color)' } : {}}>{subLabel}</p>
       </div>
       <ChevronRight size={14} className={
         theme === 'handdrawn' ? 'text-[#4B3F35]' : 

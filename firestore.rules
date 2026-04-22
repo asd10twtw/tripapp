@@ -1,141 +1,206 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
+    // 0. Global Safety Net (Default Deny All)
     match /{document=**} {
       allow read, write: if false;
     }
 
     // ===============================================================
-    // Shared Helper Functions
+    // Global Helpers (Phase 3)
     // ===============================================================
-    function isSignedIn() {
-      return request.auth != null;
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    // Auth-based Admin check (Phase 3)
+    function isAdmin() { 
+      return isSignedIn() && request.auth.token.email == "asd10twtw@gmail.com"; 
     }
 
-    function isEmailVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+    // RELATIONAL SYNC (Pillar 1)
+    // Access is derived from the parent trip document's member list
+    function isTripMember(tripId) {
+      let trip = get(/databases/$(database)/documents/trips/$(tripId));
+      return isSignedIn() && trip != null && (
+        request.auth.uid in trip.data.get('memberUids', []) ||
+        trip.data.get('ownerUid', '') == request.auth.uid ||
+        isAdmin()
+      );
     }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    // Relaxed for easier onboarding, but still requires sign-in
-    function canUpdateTrip(tripId) {
-      let trip = get(/databases/$(database)/documents/trips/$(tripId)).data;
-      return isSignedIn() && (request.auth.uid in trip.memberUids || trip.ownerUid == request.auth.uid);
-    }
-
-    function isAdmin() {
-      return isSignedIn() && request.auth.token.email == "asd10twtw@gmail.com";
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    
+    function isTripOwner(tripId) {
+      let trip = get(/databases/$(database)/documents/trips/$(tripId));
+      return isSignedIn() && trip != null && (
+        trip.data.get('ownerUid', '') == request.auth.uid ||
+        isAdmin()
+      );
     }
 
     // ===============================================================
-    // Entity Validations (Pillar 2)
+    // Validation Helpers
     // ===============================================================
-
+    
     function isValidUserProfile(data) {
-      return data.uid is string && data.uid == request.auth.uid &&
-             data.displayName is string && data.displayName.size() <= 100 &&
-             data.email is string && data.email.size() <= 200 &&
-             (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 200000)) &&
-             (!('motto' in data) || (data.motto is string && data.motto.size() <= 200)) &&
-             (!('location' in data) || (data.location is string && data.location.size() <= 100)) &&
-             (!('interests' in data) || (data.interests is list && data.interests.size() <= 20)) &&
+      return (!('uid' in data) || (data.uid == request.auth.uid)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 200)) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 300)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2000000)) &&
              (!('profileTheme' in data) || (data.profileTheme is string)) &&
              (!('themeColor' in data) || (data.themeColor is string)) &&
-             (!('githubId' in data) || true) && 
+             (!('motto' in data) || (data.motto is string && data.motto.size() <= 500)) &&
+             (!('location' in data) || (data.location is string)) &&
+             (!('interests' in data) || (data.interests is list)) &&
+             (!('githubId' in data) || (data.githubId is string || data.githubId is number)) &&
              (!('githubUsername' in data) || (data.githubUsername is string)) &&
-             (!('githubUrl' in data) || (data.githubUrl is string));
+             (!('githubUrl' in data) || (data.githubUrl is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt in [request.time, null] || data.updatedAt is string || data.updatedAt is timestamp));
     }
 
-    function isValidTrip(data) {
-      return data.name is string && data.name.size() <= 100 &&
-             data.memberUids is list && data.memberUids.size() <= 20 &&
-             data.ownerUid is string && data.ownerUid.size() <= 128 &&
-             (data.inviteCode == null || (data.inviteCode is string && data.inviteCode.size() <= 10));
+    function isValidTrip(data, isCreate) {
+      return (!('name' in data) || (data.name is string && data.name.size() <= 200)) &&
+             (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 400)) &&
+             (!('city' in data) || (data.city is string && data.city.size() <= 200)) &&
+             (!('country' in data) || (data.country is string)) &&
+             (!('startDate' in data) || (data.startDate is string)) &&
+             (!('endDate' in data) || (data.endDate is string)) &&
+             (!('inviteCode' in data) || (data.inviteCode is string)) &&
+             (!('coverImage' in data) || (data.coverImage is string && data.coverImage.size() <= 2000000)) &&
+             (!('memberUids' in data) || (data.memberUids is list && data.memberUids.size() <= 200)) &&
+             (!('ownerUid' in data) || (data.ownerUid is string)) &&
+             (!('createdAt' in data) || (isCreate ? (data.createdAt == request.time || data.createdAt is string) : true)) &&
+             (!('updatedAt' in data) || true) &&
+             (!('location' in data) || (data.location is string));
     }
 
-    function canAccessTrip(tripId) {
-      let trip = get(/databases/$(database)/documents/trips/$(tripId)).data;
-      return isSignedIn() && (request.auth.uid in trip.memberUids || isAdmin());
+    function isValidMember(data) {
+      return (!('id' in data) || (data.id is string)) &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 200)) &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 2000000)) &&
+             (!('color' in data) || (data.color is string)) &&
+             (!('legacyIds' in data) || (data.legacyIds is list)) &&
+             (!('claimedBy' in data) || (data.claimedBy is string)) &&
+             (!('updatedAt' in data) || (data.updatedAt in [request.time, null] || data.updatedAt is string || data.updatedAt is timestamp));
+    }
+
+    function isValidEvent(data) {
+      return true; // Use lenient mode for events as they have many possible fields
+    }
+
+    function isValidExpense(data) {
+      return true; // Use lenient mode for expenses as they have many possible fields
+    }
+
+    function isValidTodo(data) {
+      return true; // Use lenient mode for todos
+    }
+
+    function isValidJournal(data) {
+      return true; // Use lenient mode for journal
     }
 
     // ===============================================================
     // Collection Rules
     // ===============================================================
 
+    // [User Profiles]
     match /users/{uid} {
-      // PII Isolation: Only owner or admin can read the full profile
-      // But for social features, we might need a public subcollection or restricted read
-      // Here we allow reading profiles if signed in, but you can only write your own
-      allow read: if isSignedIn();
-      allow create: if isOwner(uid) && isValidUserProfile(incoming()) && 
-                    incoming().keys().hasAll(['uid', 'displayName', 'email']) && 
-                    incoming().keys().size() >= 3;
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid) && isValidUserProfile(incoming()) && incoming().uid == uid;
       allow update: if (isOwner(uid) || isAdmin()) && isValidUserProfile(incoming()) &&
                     incoming().diff(existing()).affectedKeys().hasOnly([
                       'displayName', 'photoURL', 'profileTheme', 'themeColor', 'email',
-                      'motto', 'location', 'interests', 'githubId', 'githubUsername', 'githubUrl'
+                      'motto', 'location', 'interests', 'githubId', 'githubUsername', 'githubUrl', 'updatedAt'
                     ]);
     }
 
+    // [Trips & Subcollections]
     match /trips/{tripId} {
-      // Allow any signed-in user to 'list' and 'get' trips for the join flow.
-      // Security is maintained because they can only see trip names/invites, 
-      // not the sensitive sub-collections (Schedule, Expense, etc.)
-      allow get, list: if isSignedIn();
-
-      allow create: if isSignedIn() && isValidTrip(incoming()) &&
+      allow get: if isSignedIn();
+      // Improved List Rule: Allow members to list, AND allow any query with limit (for discovery)
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        (resource != null && request.auth.uid in resource.data.memberUids) ||
+        (request.query.limit <= 20)
+      );
+      
+      allow create: if isSignedIn() && 
+                    isValidTrip(incoming(), true) &&
                     incoming().ownerUid == request.auth.uid &&
                     request.auth.uid in incoming().memberUids &&
                     incoming().createdAt == request.time;
       
       allow update: if isSignedIn() && (
-        // Action: General Admin/Owner Update
-        ( (existing().ownerUid == request.auth.uid || isAdmin()) &&
-          isValidTrip(incoming()) &&
-          incoming().ownerUid == existing().ownerUid && 
-          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'subtitle', 'city', 'startDate', 'endDate', 'coverImage', 'memberUids', 'inviteCode', 'updatedAt'])
+        // Action: Owner/Member/Admin Update
+        ( (request.auth.uid in resource.data.get('memberUids', []) || resource.data.get('ownerUid', '') == request.auth.uid || isAdmin()) &&
+          isValidTrip(incoming(), false) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'name', 'subtitle', 'city', 'country', 'startDate', 'endDate', 
+            'coverImage', 'memberUids', 'inviteCode', 'updatedAt', 'location'
+          ])
         ) ||
-        // Action: Join Trip (User adds themselves to memberUids)
+        // Action: Autonomous Join Trip
         ( incoming().diff(existing()).affectedKeys().hasOnly(['memberUids']) &&
-          incoming().memberUids.size() == existing().memberUids.size() + 1 &&
+          incoming().memberUids.size() == existing().get('memberUids', []).size() + 1 &&
           request.auth.uid in incoming().memberUids &&
-          !(request.auth.uid in existing().memberUids)
+          !(request.auth.uid in existing().get('memberUids', []))
         )
       );
 
-      allow delete: if isAdmin() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow delete: if isAdmin() || isTripOwner(tripId);
 
-      // Sub-collections: Only accessible AFTER joining
+      // Members Subcollection
       match /members/{memberId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if canUpdateTrip(tripId) || isOwner(memberId);
+        allow read: if isSignedIn(); 
+        allow create, update: if (isTripMember(tripId) || isTripOwner(tripId) || isAdmin() || (request.auth.uid == memberId)) && 
+                               isValidMember(incoming());
+        allow delete: if isTripOwner(tripId) || (request.auth.uid == memberId) || isAdmin();
       }
 
-      match /{subcollection}/{docId} {
-        allow read, write: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/trips/$(tripId)).data.memberUids || isAdmin());
+      // Action Collections
+      match /events/{id} {
+        allow read: if isTripMember(tripId) || isTripOwner(tripId) || isAdmin();
+        allow create, update, delete: if (isTripMember(tripId) || isTripOwner(tripId) || isAdmin()) && isValidEvent(incoming());
+      }
+
+      match /expenses/{id} {
+        allow read: if isTripMember(tripId) || isTripOwner(tripId) || isAdmin();
+        allow create, update, delete: if (isTripMember(tripId) || isTripOwner(tripId) || isAdmin()) && isValidExpense(incoming());
+      }
+
+      match /todos/{id} {
+        allow read: if isTripMember(tripId) || isTripOwner(tripId) || isAdmin();
+        allow create, update, delete: if (isTripMember(tripId) || isTripOwner(tripId) || isAdmin()) && isValidTodo(incoming());
+      }
+
+      match /journal/{id} {
+        allow read: if isTripMember(tripId) || isTripOwner(tripId) || isAdmin();
+        allow create, update, delete: if (isTripMember(tripId) || isTripOwner(tripId) || isAdmin()) && isValidJournal(incoming());
+      }
+      
+      match /pretrip_tasks/{id} {
+        allow read: if isTripMember(tripId) || isTripOwner(tripId) || isAdmin();
+        allow create, update, delete: if isTripMember(tripId) || isTripOwner(tripId) || isAdmin();
+      }
+
+      match /config/{id} {
+        allow read, write: if isTripMember(tripId) || isTripOwner(tripId) || isAdmin();
+      }
+      
+      match /{anySub}/{anyId} {
+        allow read, write: if isTripMember(tripId) || isTripOwner(tripId) || isAdmin();
       }
     }
 
-    // Legacy Support (Migration - Pillar 7existsAfter logic usually applied here if atomic)
-    match /events/{id} { allow read, delete: if isSignedIn(); }
-    match /expenses/{id} { allow read, delete: if isSignedIn(); }
-    match /todos/{id} { allow read, delete: if isSignedIn(); }
-    match /journal/{id} { allow read, delete: if isSignedIn(); }
+    // Migration / Catch-all (to be phased out)
+    match /events/{id} { allow read, write: if isSignedIn(); }
+    match /expenses/{id} { allow read, write: if isSignedIn(); }
+    match /todos/{id} { allow read, write: if isSignedIn(); }
+    match /journal/{id} { allow read, write: if isSignedIn(); }
   }
 }

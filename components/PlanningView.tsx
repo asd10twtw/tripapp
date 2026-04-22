@@ -4,7 +4,7 @@ import { TodoItem, Member } from '../types';
 import { User } from 'firebase/auth';
 import { Check, Plus, ShoppingBasket, ShoppingBag, Trash2, MapPin, Image as ImageIcon, Camera, X, Loader2 } from 'lucide-react';
 import { db } from '../services/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, orderBy, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
 
@@ -110,9 +110,14 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
 
   useEffect(() => {
     if (members.length > 0 && !activeMemberId) {
-        setActiveMemberId(currentUser.uid);
+        const found = members.find(m => m.id === currentUser?.uid);
+        if (found) {
+            setActiveMemberId(found.id);
+        } else {
+            setActiveMemberId(members[0].id);
+        }
     }
-  }, [members, activeMemberId, currentUser.uid]);
+  }, [members, activeMemberId, currentUser]);
 
   useEffect(() => {
     const q = query(collection(db, 'trips', tripId, 'todos'), orderBy('createdAt', 'desc'));
@@ -131,7 +136,11 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
           }
         });
 
-        return { id: doc.id, ...data } as TodoItem;
+        return { 
+          id: doc.id, 
+          ...data,
+          image: data.image || data.photo || (data.photos && data.photos.length > 0 ? data.photos[0] : undefined)
+        } as TodoItem;
       }));
     });
     return () => unsubscribe();
@@ -147,7 +156,10 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
 
   const toggleTodo = async (id: string, currentStatus: boolean) => {
     try {
-      await updateDoc(doc(db, 'trips', tripId, 'todos', id), { completed: !currentStatus });
+      await updateDoc(doc(db, 'trips', tripId, 'todos', id), { 
+        completed: !currentStatus,
+        updatedAt: serverTimestamp()
+      });
     } catch (err) {
       console.error("Update failed:", err);
     }
@@ -165,7 +177,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
         completed: false, 
         ownerId: activeMemberId, 
         type: activeTab, 
-        createdAt: new Date().toISOString() 
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
       setNewItemText('');
       setNewItemLocation('');
@@ -222,7 +235,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                 onZoomChange={setZoom}
               />
             </div>
-            <div className="bg-slate-900 p-6 pb-10 flex flex-col gap-6">
+            <div className="bg-slate-900 p-6 pb-32 flex flex-col gap-6">
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">縮放</span>
                 <input
@@ -233,7 +246,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                   step={0.1}
                   aria-labelledby="Zoom"
                   onChange={(e) => setZoom(Number(e.target.value))}
-                  className="flex-1 accent-sky-400"
+                  className="flex-1"
+                  style={{ accentColor: 'var(--brand-color)' }}
                 />
               </div>
               <div className="flex gap-3">
@@ -248,7 +262,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                   type="button"
                   onClick={handleCropSave}
                   disabled={isCropping}
-                  className="flex-[2] py-4 bg-sky-500 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="flex-[2] py-4 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                  style={{ backgroundColor: 'var(--brand-color)' }}
                 >
                   {isCropping ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} 
                   確認裁切
@@ -266,7 +281,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
             <div className="flex items-center gap-2">
               <div className="w-12 h-12">
                 <img 
-                  src="/s1.png" 
+                  src="https://cdn.imgchest.com/files/a06c08a89a65.png" 
+                  onError={(e) => { (e.target as HTMLImageElement).src = 'https://i.ibb.co/Y7bFp8jC/trippic.png'; }}
                   className="w-full h-full object-contain" 
                   alt="Shopping"
                   referrerPolicy="no-referrer"
@@ -278,7 +294,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
             <div className="flex items-center gap-2">
               <div className="w-12 h-12">
                 <img 
-                  src="/s2.png" 
+                  src="https://cdn.imgchest.com/files/db41acb3c1ba.png" 
+                  onError={(e) => { (e.target as HTMLImageElement).src = 'https://i.ibb.co/Y7bFp8jC/trippic.png'; }}
                   className="w-full h-full object-contain" 
                   alt="Shopping"
                   referrerPolicy="no-referrer"
@@ -288,8 +305,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
             </div>
           ) : (
             <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-              <div className="bg-amber-100 p-2 rounded-xl">
-                <ShoppingBag size={20} className="text-amber-500" />
+              <div className="p-2 rounded-xl" style={{ backgroundColor: 'rgba(var(--brand-color-rgb), 0.15)' }}>
+                <ShoppingBag size={20} style={{ color: 'var(--brand-color)' }} />
               </div>
               購物清單
             </h2>
@@ -374,17 +391,23 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                   className="mt-3 rounded-2xl overflow-hidden aspect-video bg-slate-50 border border-slate-100 cursor-zoom-in"
                   onClick={(e) => { e.stopPropagation(); setZoomedImage(item.image!); }}
                 >
-                  <img src={item.image} alt={item.text} className="w-full h-full object-cover" />
+                  <img src={item.image} alt={item.text} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </div>
               )}
             </div>
           ))}
           {filteredTodos.length === 0 && (
             <div className="text-center py-10">
-              <div className="w-20 h-20 bg-slate-50 rounded-[24px] flex items-center justify-center mx-auto mb-4 border border-slate-100 shadow-sm">
-                <ShoppingBasket size={32} className="text-slate-200" />
+              <div className="w-20 h-20 bg-white rounded-[24px] flex items-center justify-center mx-auto mb-4 border border-slate-100 shadow-sm overflow-hidden">
+                {theme === 'handdrawn' || theme === 'scrapbook' ? (
+                  <img src="https://cdn.imgchest.com/files/a06c08a89a65.png" alt="Empty" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+                ) : theme === 'hipster' ? (
+                  <img src="https://cdn.imgchest.com/files/db41acb3c1ba.png" alt="Empty" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+                ) : (
+                  <ShoppingBasket size={32} className="text-slate-200" />
+                )}
               </div>
-              <p className="text-slate-300 font-bold text-xs">還沒有心願項目 ✨</p>
+              <p className="text-slate-300 font-bold text-xs">尚無心願項目 ✨</p>
             </div>
           )}
         </div>

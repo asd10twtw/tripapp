@@ -10,10 +10,10 @@ export const BackgroundDoodles: React.FC<BackgroundDoodlesProps> = ({ user }) =>
   if (user.profileTheme !== 'handdrawn' && user.profileTheme !== 'scrapbook') return null;
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 bg-[#F9F5E6]">
+    <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 bg-[var(--bg-color)]">
       {/* Background paper texture/dots */}
       <div className="absolute inset-0 opacity-[0.03]" style={{ 
-        backgroundImage: 'radial-gradient(#4B3F35 1px, transparent 1px)', 
+        backgroundImage: 'radial-gradient(rgba(var(--brand-color-rgb), 0.3) 1px, transparent 1px)', 
         backgroundSize: '24px 24px' 
       }} />
 

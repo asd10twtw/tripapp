@@ -8,7 +8,7 @@ import { PlanningView } from './PlanningView';
 import { JournalView } from './JournalView';
 import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, ChevronRight, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, onSnapshot, doc, updateDoc, setDoc, getDocs, query, orderBy, addDoc, limit, arrayUnion, deleteDoc, writeBatch, where, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, setDoc, getDocs, query, orderBy, addDoc, limit, arrayUnion, deleteDoc, writeBatch, where, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import * as XLSX from 'xlsx';
 import Cropper from 'react-easy-crop';
@@ -44,6 +44,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [newMemberName, setNewMemberName] = useState('');
   const [isDeleteTripModalOpen, setIsDeleteTripModalOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   
   // Cropping state
@@ -94,10 +95,16 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
       
       if (cropMode === 'trip_cover') {
         const compressed = await compressImage(croppedImage, 800, 450, 0.7);
-        await updateDoc(doc(db, 'trips', tripId), { coverImage: compressed });
+        await updateDoc(doc(db, 'trips', tripId), { 
+          coverImage: compressed,
+          updatedAt: serverTimestamp()
+        });
       } else if (cropMode === 'member_avatar' && pendingMemberId) {
         const compressed = await compressImage(croppedImage, 200, 200, 0.7);
-        await updateDoc(doc(db, 'trips', tripId, 'members', pendingMemberId), { avatar: compressed });
+        await updateDoc(doc(db, 'trips', tripId, 'members', pendingMemberId), { 
+          avatar: compressed,
+          updatedAt: serverTimestamp()
+        });
       }
       
       setImageToCrop(null);
@@ -177,7 +184,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     try {
       // 1. Virtual Sync: Update Member document to include legacyId in array
       await updateDoc(doc(db, 'trips', tripId, 'members', targetMemberId), {
-        legacyIds: arrayUnion(orphanId)
+        legacyIds: arrayUnion(orphanId),
+        updatedAt: serverTimestamp()
       });
 
       // 2. Physical Migration (Background Batch)
@@ -308,7 +316,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
           id: user.uid,
           name: user.displayName || '新成員',
           avatar: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
-          color: 'bg-sky-400'
+          color: 'bg-sky-400',
+          updatedAt: serverTimestamp()
         };
       } else {
         const placeholder = members.find(m => m.id === placeholderId);
@@ -324,7 +333,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
           id: user.uid,
           name: user.displayName || placeholder.name,
           avatar: finalAvatar,
-          legacyIds: [placeholderId]
+          legacyIds: [placeholderId],
+          updatedAt: serverTimestamp()
         };
       }
       
@@ -421,7 +431,10 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   };
 
   const handleUpdateMemberName = async (id: string, newName: string) => {
-    await updateDoc(doc(db, 'trips', tripId, 'members', id), { name: newName });
+    await updateDoc(doc(db, 'trips', tripId, 'members', id), { 
+      name: newName,
+      updatedAt: serverTimestamp()
+    });
   };
 
   const handleMemberAvatarChange = async (memberId: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -486,7 +499,10 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     if (field === 'city') setEditCity(value);
     if (field === 'startDate') setEditStartDate(value);
     if (field === 'endDate') setEditEndDate(value);
-    await updateDoc(doc(db, 'trips', tripId), { [field]: value });
+    await updateDoc(doc(db, 'trips', tripId), { 
+      [field]: value,
+      updatedAt: serverTimestamp()
+    });
   };
 
   const handleAddMember = async () => {
@@ -501,6 +517,24 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     await setDoc(doc(db, 'trips', tripId, 'members', newId), newMember);
     setNewMemberName('');
     setIsAddMemberModalOpen(false);
+  };
+
+  const handleDeleteMember = async () => {
+    if (!memberToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'trips', tripId, 'members', memberToDelete));
+      setMemberToDelete(null);
+    } catch (err) {
+      console.error("Delete member failed:", err);
+    }
+  };
+
+  const confirmDeleteMember = (memberId: string) => {
+    if (members.length <= 1) {
+      alert("旅程至少需要保留一位成員喔！");
+      return;
+    }
+    setMemberToDelete(memberId);
   };
 
   const exportToExcel = async () => {
@@ -524,30 +558,22 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
       case Tab.SCHEDULE: return <ScheduleView members={members} tripId={tripId} startDate={trip.startDate} endDate={trip.endDate} theme={user.profileTheme} />;
       case Tab.EXPENSE: return <ExpenseView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} />;
       case Tab.PLANNING: return <PlanningView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} />;
-      case Tab.JOURNAL: return <JournalView members={members} tripId={tripId} theme={user.profileTheme} />;
+      case Tab.JOURNAL: return <JournalView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} />;
       default: return <ScheduleView members={members} tripId={tripId} startDate={trip.startDate} endDate={trip.endDate} />;
     }
   };
 
   const getThemeBg = () => {
-    switch (user?.profileTheme) {
-      case 'handdrawn': return 'bg-transparent';
-      case 'hipster': return 'bg-[#FDFCF8]';
-      case 'minimalist': return 'bg-[#F8FAFC]';
-      default: return 'bg-[#FCFBF7]';
-    }
+    return 'bg-transparent';
   };
 
   return (
-    <div className={`h-full flex flex-col w-full max-w-md mx-auto relative overflow-hidden transition-colors duration-500 ${getThemeBg()}`}>
+    <div className={`h-full flex flex-col w-full max-w-md mx-auto relative overflow-hidden transition-colors duration-500`}>
       {/* Background doodles are handled by App.tsx */}
       {/* Header */}
-      <div className={`px-6 pt-6 pb-4 shrink-0 flex flex-col gap-4 relative z-30 backdrop-blur-sm ${
-        user.profileTheme === 'handdrawn' ? 'bg-[#F9F5E6]/80' : 
-        user.profileTheme === 'scrapbook' ? 'bg-[#FDFCF8]/80' :
-        user.profileTheme === 'minimalist' ? 'bg-[#F8FAFC]/80' :
-        'bg-transparent'
-      }`}>
+      <div className={`px-6 pt-8 pb-4 shrink-0 flex flex-col gap-4 relative z-30`} style={{ 
+        backgroundColor: 'transparent'
+      }}>
         {/* Top Bar: Back, Share, Settings */}
         <div className="flex items-center justify-between">
           <button 
@@ -622,10 +648,10 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 </span>
               )}
               <div className={`text-[11px] font-black tracking-normal ${
-                user.profileTheme === 'handdrawn' ? 'text-[#8B5E3C]' : 
+                user.profileTheme === 'handdrawn' ? '' : 
                 user.profileTheme === 'scrapbook' ? 'text-stone-400' :
                 'text-slate-400'
-              }`}>
+              }`} style={user.profileTheme === 'handdrawn' ? { color: 'var(--brand-color)' } : {}}>
                 {trip?.startDate?.replace(/-/g, '.') || '2026.01.30'} - {trip?.endDate?.split('-').slice(1).join('.') || '02.05'}
               </div>
             </div>
@@ -697,15 +723,22 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
       </main>
 
       {/* Bottom Navigation */}
-      <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[60] ${user.profileTheme === 'handdrawn' ? 'px-0 pt-2' : 'px-6 bottom-3'}`}>
-        <nav className={`
-          ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 
-            (user.profileTheme === 'handdrawn' ? 'bg-white/95 backdrop-blur-sm rounded-none border-t-[1.5px] border-b-0 border-r-0 border-l-0' : 'bg-white rounded-2xl border-[1.5px]') + ' flex items-stretch p-1 relative overflow-visible border-[#4B3F35]/15 shadow-[0_-12px_40px_rgba(75,63,53,0.12)]' : 
-            user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
-            user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
-            'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
-          justify-between
-        `}>
+      <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[60] ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'px-0 bottom-0' : 'px-6 bottom-3'}`}>
+        <nav 
+          className={`
+            ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 
+              'bg-white/95 backdrop-blur-md rounded-none border-t-[1.5px] flex items-stretch p-1 relative overflow-visible border-[#4B3F35]/15 shadow-[0_-12px_40px_rgba(75,63,53,0.12)]' : 
+              user.profileTheme === 'hipster' ? 'backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex pb-1' :
+              user.profileTheme === 'watercolor' ? 'backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex pb-1' :
+              'backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex pb-1'} 
+            justify-between
+          `}
+          style={{ 
+            backgroundColor: user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? undefined : 'rgba(255, 255, 255, 0.95)',
+            borderColor: user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? undefined : 'rgba(var(--brand-color-rgb), 0.15)',
+            boxShadow: user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? undefined : '0 8px 30px rgba(0,0,0,0.08)'
+          }}
+        >
           <NavButton active={activeTab === Tab.SCHEDULE} onClick={() => setActiveTab(Tab.SCHEDULE)} icon={Calendar} label="行程" theme={user.profileTheme} />
           <NavButton active={activeTab === Tab.EXPENSE} onClick={() => setActiveTab(Tab.EXPENSE)} icon={CircleDollarSign} label="記帳" theme={user.profileTheme} />
           <NavButton active={activeTab === Tab.PLANNING} onClick={() => setActiveTab(Tab.PLANNING)} icon={ShoppingBag} label="購物" theme={user.profileTheme} />
@@ -728,7 +761,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 onZoomChange={setZoom}
               />
             </div>
-            <div className="bg-slate-900 p-6 pb-10 flex flex-col gap-6">
+            <div className="bg-slate-900 p-6 pb-32 flex flex-col gap-6">
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">縮放</span>
                 <input
@@ -739,7 +772,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                   step={0.1}
                   aria-labelledby="Zoom"
                   onChange={(e) => setZoom(Number(e.target.value))}
-                  className="flex-1 accent-sky-400"
+                  className="flex-1"
+                  style={{ accentColor: 'var(--brand-color)' }}
                 />
               </div>
               <div className="flex gap-3">
@@ -752,7 +786,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 <button
                   onClick={handleCropSave}
                   disabled={isCropping}
-                  className="flex-[2] py-4 bg-sky-500 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                  className="flex-[2] py-4 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                  style={{ backgroundColor: 'var(--brand-color)' }}
                 >
                   {isCropping ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} 
                   確認裁切
@@ -802,7 +837,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                       <img src={m.avatar} alt={m.name} className="w-full h-full object-cover" />
                     </div>
                     <div className="text-left flex-1">
-                      <div className="text-sm font-black text-slate-700 group-hover:text-sky-500 transition-colors">{m.name}</div>
+                      <div className="text-sm font-black text-slate-700 transition-colors group-hover:opacity-80" style={{ color: 'var(--brand-color)' }}>{m.name}</div>
                       <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">點擊認領此身份</div>
                     </div>
                     {isClaiming ? (
@@ -915,7 +950,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 block">封面圖片</label>
-                    <label className="text-[10px] font-black text-sky-500 uppercase tracking-widest cursor-pointer flex items-center gap-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest cursor-pointer flex items-center gap-1" style={{ color: 'var(--brand-color)' }}>
                       <ImageIcon size={12} /> 更換封面
                       <input type="file" className="hidden" onChange={handleTripCoverChange} accept="image/*" />
                     </label>
@@ -938,7 +973,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                       </button>
                       <button 
                         onClick={() => setIsAddMemberModalOpen(true)} 
-                        className="text-[10px] font-black text-sky-500 uppercase tracking-widest flex items-center gap-1"
+                        className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1"
+                        style={{ color: 'var(--brand-color)' }}
                       >
                         <UserPlus size={12} /> 新增成員
                       </button>
@@ -995,12 +1031,16 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                       <div key={m.id} className={`flex items-center gap-4 p-3 ${user.profileTheme === 'handdrawn' ? '' : 'bg-slate-50 rounded-2xl border border-slate-100'}`}>
                         <div className="relative group">
                           <img src={m.avatar} alt={m.name} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" />
-                          <label className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
-                            <Download size={14} className="text-white" />
-                            <input type="file" className="hidden" onChange={(e) => handleMemberAvatarChange(m.id, e)} accept="image/*" />
-                          </label>
                         </div>
-                        <MemberNameInput member={m} onUpdate={handleUpdateMemberName} />
+                        <div className="flex-1 min-w-0">
+                          <MemberNameInput member={m} onUpdate={handleUpdateMemberName} />
+                        </div>
+                        <button 
+                          onClick={() => confirmDeleteMember(m.id)}
+                          className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all active:scale-90"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1052,7 +1092,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                     value={newMemberName}
                     onChange={(e) => setNewMemberName(e.target.value)}
                     placeholder="請輸入成員名稱"
-                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-sky-500/20 transition-all font-sans"
+                    className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 transition-all font-sans"
+                    style={{ '--tw-ring-color': 'rgba(var(--brand-color-rgb), 0.2)' } as React.CSSProperties}
                     autoFocus
                   />
                 </div>
@@ -1065,7 +1106,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                   </button>
                   <button 
                     onClick={handleAddMember}
-                    className="flex-1 py-4 bg-sky-500 text-white rounded-2xl font-black text-xs shadow-lg shadow-sky-100 active:scale-95 transition-all"
+                    className="flex-1 py-4 text-white rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all"
+                    style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.2)' }}
                   >
                     加入
                   </button>
@@ -1127,6 +1169,50 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
         )}
       </AnimatePresence>
       
+      {/* Delete Member Confirmation Modal */}
+      <AnimatePresence>
+        {memberToDelete && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMemberToDelete(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xs bg-white rounded-[32px] p-8 shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500">
+                <AlertCircle size={32} />
+              </div>
+              <h3 className="text-xl font-black text-slate-800 mb-2 font-sans">刪除旅伴？</h3>
+              <p className="text-slate-400 text-[10px] font-bold mb-8 leading-relaxed font-sans">
+                確定要刪除這名成員嗎？<br/>
+                刪除後，該成員建立的支出與紀錄將標記為「遺失資料」，您可以之後重新分配給其他成員。
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setMemberToDelete(null)}
+                  className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-500 text-xs font-black active:scale-95 transition-all"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={handleDeleteMember}
+                  className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-100 active:scale-95 transition-all"
+                >
+                  確認刪除
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
       {/* QR Code Modal */}
       <AnimatePresence>
         {isQrModalOpen && (
@@ -1165,7 +1251,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 </div>
                 <button 
                   onClick={() => copyToClipboard(trip?.inviteCode || tripId.substring(0, 8))}
-                  className="px-4 py-2 bg-white text-sky-500 rounded-full text-[10px] font-black border border-sky-100 shadow-sm active:scale-95 transition-all"
+                  className="px-4 py-2 bg-white rounded-full text-[10px] font-black border shadow-sm active:scale-95 transition-all"
+                  style={{ color: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.2)' }}
                 >
                   {isCopied ? '已複製編號' : '點擊複製編號'}
                 </button>
@@ -1178,7 +1265,8 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                   copyToClipboard(url);
                   setIsQrModalOpen(false);
                 }}
-                className="w-full py-4 bg-sky-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-sky-100 active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.2)' }}
               >
                 <Check size={18} /> {isCopied ? '已複製邀請連結' : '直接複製邀請連結'}
               </button>
@@ -1231,14 +1319,14 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
         onClick={onClick} 
         className={`flex flex-col items-center justify-center flex-1 py-2 group relative font-handdrawn transition-all`}
       >
-        <div className={`transition-all duration-300 flex items-center justify-center mb-0.5 ${active ? 'text-[#8B5E3C] scale-110' : 'text-stone-300 opacity-80'}`}>
+        <div className={`transition-all duration-300 flex items-center justify-center mb-0.5 ${active ? 'scale-110' : 'text-stone-300 opacity-80'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
           <Icon size={20} strokeWidth={active ? 2.5 : 2} />
         </div>
-        <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${active ? 'text-[#8B5E3C]' : 'text-stone-300'}`}>
+        <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${active ? '' : 'text-stone-300'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
           {label}
         </span>
         {active && (
-          <div className="absolute -bottom-1 w-6 h-[2px] bg-[#8B5E3C]/30 rounded-full" style={{ clipPath: 'polygon(1% 40%, 99% 2%, 96% 100%, 4% 90%)' }} />
+          <div className="absolute -bottom-1 w-6 h-[2px] rounded-full" style={{ clipPath: 'polygon(1% 40%, 99% 2%, 96% 100%, 4% 90%)', backgroundColor: 'var(--brand-color)', opacity: 0.3 }} />
         )}
       </button>
     );
@@ -1246,17 +1334,17 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
 
   return (
     <button onClick={onClick} className={`flex flex-col items-center justify-center flex-1 py-2 group relative ${isHipster ? 'font-hipster' : isWatercolor ? 'font-sans italic' : ''}`}>
-      <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-stone-300 group-active:scale-90'}`} style={{ color: active ? (isHipster ? '#78716C' : 'var(--brand-color)') : (isWatercolor ? '#A5C4D4' : undefined) }}>
+      <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-stone-300 group-active:scale-90'}`} style={{ color: active ? 'var(--brand-color)' : (isWatercolor ? '#A5C4D4' : undefined) }}>
         <Icon size={20} strokeWidth={active ? 2 : 1.5} />
       </div>
-      <span className={`text-[9px] font-bold mt-0.5 transition-colors duration-300 ${active ? '' : (isWatercolor ? 'text-sky-200' : 'text-stone-300')}`} style={{ color: active ? (isHipster ? '#78716C' : 'var(--brand-color)') : undefined }}>
+      <span className={`text-[9px] font-bold mt-0.5 transition-colors duration-300 ${active ? '' : (isWatercolor ? 'text-sky-200' : 'text-stone-300')}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
         {label}
       </span>
       {active && !isHipster && (
         <motion.div layoutId="nav-active" className="absolute -bottom-1 w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--brand-color)' }} />
       )}
       {active && isHipster && (
-        <div className="absolute top-1 right-4 w-1 h-1 bg-stone-400 rounded-full" />
+        <div className="absolute top-1 right-4 w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--brand-color)' }} />
       )}
     </button>
   );

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Trip, UserProfile } from '../types';
 import { Plus, Calendar, MapPin, LogOut, Settings, User as UserIcon, Trash2, Wallet, Star, Award, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints } from 'lucide-react';
 import { db, logout } from '../services/firebase';
-import { collection, query, where, onSnapshot, addDoc, orderBy, getDocs, limit, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, orderBy, getDocs, limit, deleteDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface DashboardProps {
@@ -51,7 +51,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         coverImage: `https://picsum.photos/seed/${newTripName}/800/400`,
         memberUids: [user.uid],
         ownerUid: user.uid,
-        createdAt: new Date().toISOString(),
+        createdAt: serverTimestamp(),
         inviteCode
       };
       const tripRef = await addDoc(collection(db, 'trips'), tripData);
@@ -106,7 +106,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         return {
           container: 'bg-transparent',
           font: 'font-handdrawn',
-          accent: 'text-[#8B5E3C]',
+          accent: 'var(--brand-color)',
           card: 'bg-white border-[1.5px] border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.03)]',
         };
       case 'scrapbook':
@@ -118,21 +118,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         };
       case 'hipster':
         return {
-          container: 'bg-[#FDFCF8]',
+          container: 'bg-transparent',
           font: 'font-hipster',
           accent: 'text-stone-400',
           card: 'bg-white border border-stone-100 shadow-sm',
         };
       case 'minimalist':
         return {
-          container: 'bg-[#F8FAFC]',
+          container: 'bg-transparent',
           font: 'font-sans',
           accent: 'text-slate-400',
           card: 'bg-white border border-slate-100 shadow-soft',
         };
       default:
         return {
-          container: 'bg-[#F8FAFC]',
+          container: 'bg-transparent',
           font: 'font-sans',
           accent: 'text-slate-400',
           card: 'bg-white border border-slate-100 shadow-soft',
@@ -389,7 +389,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
             {plannedTrips.length > 0 && (
               <div className="space-y-6">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-4 bg-sky-300 rounded-full" />
+                  <div className="w-1.5 h-4 rounded-full" style={{ backgroundColor: 'var(--brand-color)' }} />
                   <h2 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] font-handdrawn">正在進行中 ({plannedTrips.length})</h2>
                 </div>
                 <div className="space-y-6">
@@ -403,7 +403,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
             {completedTrips.length > 0 && (
               <div className="space-y-6">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-4 bg-stone-300 rounded-full" />
+                  <div className="w-1.5 h-4 rounded-full opacity-50" style={{ backgroundColor: 'var(--brand-color)' }} />
                   <h2 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] font-handdrawn">已完成的回憶 ({completedTrips.length})</h2>
                 </div>
                 <div className="space-y-6">
@@ -431,7 +431,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
                 placeholder="搜尋旅程..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-5 py-3 rounded-[20px] bg-white border border-slate-100 shadow-soft outline-none text-xs font-bold text-slate-700"
+                className="w-full pl-10 pr-5 py-3 rounded-[20px] bg-white border border-slate-100 shadow-soft outline-none text-xs font-bold text-slate-700 transition-all focus:ring-2"
+                style={{ '--tw-ring-color': 'rgba(var(--brand-color-rgb), 0.2)' } as React.CSSProperties}
               />
               <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300">
                 <Plus size={20} className="rotate-45" />
@@ -608,7 +609,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
                         }
                       }}
                       disabled={!joinCode.trim()}
-                      className="flex-[2] py-3.5 rounded-2xl bg-sky-500 text-white text-xs font-black shadow-lg shadow-sky-100 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+                      className="flex-[2] py-3.5 rounded-2xl text-white text-xs font-black shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+                      style={{ 
+                        backgroundColor: joinCode.trim() ? 'var(--brand-color)' : undefined, 
+                        boxShadow: joinCode.trim() ? '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.2)' : undefined 
+                      }}
                     >
                       加入旅程
                     </button>

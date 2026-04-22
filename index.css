@@ -30,10 +30,11 @@
 :root {
   --brand-color: #3D74B6;
   --brand-text: #FFFFFF;
+  --bg-color: #FCFBF7;
 }
 
 body {
-  background-color: #FCFBF7;
+  background-color: var(--bg-color);
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   font-family: 'Inter', 'Noto Sans TC', sans-serif;
@@ -42,16 +43,16 @@ body {
 
 /* Global Theme Styles */
 body.theme-hipster {
-  background-color: #FDFBFA; /* Creamy white */
+  background-color: var(--bg-color);
   font-family: 'Raleway', 'Noto Serif TC', 'Yuji Syuku', serif;
   font-weight: 300;
   color: #57534E;
 }
 body.theme-handdrawn {
-  background-color: #F9F5E6; /* Warm sketchbook paper */
+  background-color: var(--bg-color);
   background-image: 
-    radial-gradient(#4B3F35 0.5px, transparent 0.5px),
-    radial-gradient(#4B3F35 0.5px, #F9F5E6 0.5px);
+    radial-gradient(rgba(var(--brand-color-rgb), 0.1) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(var(--brand-color-rgb), 0.1) 0.5px, var(--bg-color) 0.5px);
   background-size: 20px 20px;
   background-position: 0 0, 10px 10px;
   background-attachment: fixed;
@@ -65,12 +66,12 @@ body.theme-handdrawn::after {
   position: fixed;
   inset: 0;
   background-image: url("https://www.transparenttextures.com/patterns/natural-paper.png");
-  opacity: 0.4;
+  opacity: 0.2;
   pointer-events: none;
   z-index: -1;
 }
 body.theme-minimalist {
-  background-color: #F8FAFC; /* Light gray (slate-50) */
+  background-color: var(--bg-color);
   font-family: 'Inter', sans-serif;
 }
 
@@ -94,7 +95,7 @@ body.theme-minimalist {
 .theme-handdrawn {
   letter-spacing: 0.18em;
 }
-.theme-handdrawn p, .theme-handdrawn span, .theme-handdrawn div, .theme-handdrawn input, .theme-handdrawn button {
+.theme-handdrawn p, .theme-handdrawn span, .theme-handdrawn input, .theme-handdrawn button {
   letter-spacing: 0.18em;
 }
 .theme-handdrawn .bg-white {

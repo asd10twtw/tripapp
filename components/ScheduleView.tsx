@@ -289,7 +289,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
               } ${theme === 'scrapbook' ? 'rounded-xl' : 'rounded-[18px]'}`}
               style={{ 
                 borderWidth: selectedDate === d.val ? '2px' : '1.5px',
-                borderColor: selectedDate === d.val ? (theme === 'scrapbook' ? '#8B5E3C' : 'var(--brand-color)') : undefined,
+                borderColor: selectedDate === d.val ? (theme === 'handdrawn' || theme === 'scrapbook' ? 'var(--brand-color)' : 'var(--brand-color)') : undefined,
               }}
             >
               {d.val === 'PRE_TRIP' ? (
@@ -460,9 +460,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                         : 'bg-white rounded-[24px] border border-slate-50 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4'
                     }`}
                 >
-                    {(theme === 'scrapbook' || theme === 'hipster') && (
+                    {(theme === 'handdrawn' || theme === 'scrapbook' || theme === 'hipster') && (
                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 flex flex-col items-center">
-                        <div className={`w-3 h-3 rounded-full bg-white border-2 z-10 ${theme === 'hipster' ? 'border-stone-400 scale-90' : 'border-[#8B5E3C]'}`} />
+                        <div className={`w-3 h-3 rounded-full bg-white border-2 z-10 ${theme === 'hipster' ? 'border-stone-400 scale-90' : ''}`} style={theme === 'handdrawn' || theme === 'scrapbook' ? { borderColor: 'var(--brand-color)' } : {}} />
                         {event.time && (
                           <span className={`text-[8px] font-black mt-1 whitespace-nowrap -rotate-90 ${theme === 'hipster' ? 'text-stone-300 font-hipster' : 'text-stone-400'}`}>{event.time}</span>
                         )}

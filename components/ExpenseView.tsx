@@ -6,6 +6,7 @@ import { Plus, Users, Calendar, X, ChevronRight, Trash2, Check, Landmark, ArrowR
 import { db } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc, getDoc } from 'firebase/firestore';
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ExpenseViewProps {
   members: Member[];
@@ -40,7 +41,18 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [category, setCategory] = useState<string>(EventCategory.FOOD);
-  const [payer, setPayer] = useState(members[0]?.id || currentUser.uid);
+  const [payer, setPayer] = useState('');
+
+  useEffect(() => {
+    if (members.length > 0 && !payer) {
+        const found = members.find(m => m.id === currentUser?.uid);
+        if (found) {
+            setPayer(found.id);
+        } else {
+            setPayer(members[0].id);
+        }
+    }
+  }, [members, payer, currentUser]);
   const [selectedSplits, setSelectedSplits] = useState<string[]>([]);
   const [customSplits, setCustomSplits] = useState<Record<string, string>>({});
   const [isCustomSplit, setIsCustomSplit] = useState(false);
@@ -400,8 +412,29 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
         </div>
       </div>
 
-      {activeSubTab === 'list' ? (
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-24 space-y-6 pt-4 no-scrollbar">
+      <div className="flex-1 min-h-0 relative overflow-hidden">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeSubTab}
+            initial={{ opacity: 0, x: activeSubTab === 'list' ? -50 : 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: activeSubTab === 'list' ? 50 : -50 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30, opacity: { duration: 0.2 } }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.15}
+            onDragEnd={(e, info) => {
+              const threshold = 100;
+              if (info.offset.x > threshold && activeSubTab === 'settle') {
+                setActiveSubTab('list');
+              } else if (info.offset.x < -threshold && activeSubTab === 'list') {
+                setActiveSubTab('settle');
+              }
+            }}
+            className="absolute inset-0 overflow-y-auto no-scrollbar px-6 pb-24 pt-4"
+          >
+            {activeSubTab === 'list' ? (
+              <div className="space-y-6">
             <div className="flex justify-between items-center px-1 relative">
                {theme === 'scrapbook' && (
                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-24 h-6 washi-tape-grid bg-amber-100/40 border-x border-amber-200/10 rotate-[-1deg] z-0" />
@@ -410,11 +443,11 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                <button 
                  onClick={openAddModal} 
                  className={`flex items-center justify-center shadow-active active:scale-90 transition-transform relative z-10 ${
-                   theme === 'scrapbook' ? 'w-10 h-10 rounded-xl bg-[#8B5E3C] text-white' : 'p-2.5 rounded-xl text-white'
+                   theme === 'handdrawn' || theme === 'scrapbook' ? 'w-10 h-10 rounded-xl' : 'p-2.5 rounded-xl text-white'
                  }`} 
-                 style={theme !== 'scrapbook' ? { backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' } : {}}
-               >
-                 <Plus size={theme === 'scrapbook' ? 24 : 18} strokeWidth={3}/>
+                 style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}
+                >
+                 <Plus size={theme === 'handdrawn' || theme === 'scrapbook' ? 24 : 18} strokeWidth={3}/>
                </button>
             </div>
             {sortedDates.map(date => (
@@ -450,7 +483,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                                   <div className="pt-0.5 min-w-0">
                                     <div className={`text-sm font-bold leading-tight mb-1 truncate ${theme === 'scrapbook' ? 'text-stone-700' : 'text-slate-800'}`}>{exp.description}</div>
                                     <div className="flex items-center gap-2">
-                                       <span className={`text-[10px] font-black tracking-tight ${theme === 'scrapbook' ? 'text-stone-400' : 'text-slate-400'}`}>By <span style={{ color: theme === 'scrapbook' ? '#8B5E3C' : 'var(--brand-color)' }}>{payerM?.name}</span></span>
+                                       <span className={`text-[10px] font-black tracking-tight ${theme === 'handdrawn' || theme === 'scrapbook' ? 'text-stone-400' : 'text-slate-400'}`}>By <span style={{ color: theme === 'handdrawn' || theme === 'scrapbook' ? 'var(--brand-color)' : 'var(--brand-color)' }}>{payerM?.name}</span></span>
                                        {exp.customSplits && <span className="text-[8px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded font-black border border-amber-100 uppercase tracking-tighter">Custom</span>}
                                     </div>
                                   </div>
@@ -484,9 +517,9 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                     </div>
                 </div>
             ))}
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-24 pt-4 space-y-6 no-scrollbar">
+              </div>
+            ) : (
+              <div className="space-y-8">
             <div className="bg-sky-50 rounded-2xl p-5 border border-sky-100 shadow-soft space-y-4">
                 <div className="flex justify-between items-center gap-2">
                    <h4 className="text-sky-500 text-[10px] font-black tracking-tight uppercase shrink-0">匯率設定</h4>
@@ -642,8 +675,11 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                     </div>
                 </div>
             </div>
-        </div>
-      )}
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
       {viewingMemberDetailsId && viewingMember && (
         <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm flex items-end justify-center">

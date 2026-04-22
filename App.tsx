@@ -264,12 +264,22 @@ const App: React.FC = () => {
       const g = parseInt(hex.substring(2, 4), 16);
       const b = parseInt(hex.substring(4, 6), 16);
       document.documentElement.style.setProperty('--brand-color-rgb', `${r}, ${g}, ${b}`);
+      
+      // Calculate a very light background color based on the brand color
+      // We use 0.08 opacity to match the desired trip view tint
+      // But for handdrawn theme, we keep the original paper color
+      const isHanddrawn = user?.profileTheme === 'handdrawn' || user?.profileTheme === 'scrapbook';
+      const bgColor = isHanddrawn ? '#FCFBF7' : `rgba(${r}, ${g}, ${b}, 0.08)`;
+      document.documentElement.style.setProperty('--bg-color', bgColor);
+
       const brightness = (r * 299 + g * 587 + b * 114) / 1000;
       const textColor = brightness > 155 ? '#1E293B' : '#FFFFFF';
       document.documentElement.style.setProperty('--brand-text', textColor);
     } else {
       document.documentElement.style.setProperty('--brand-color', '#3D74B6');
       document.documentElement.style.setProperty('--brand-color-rgb', '61, 116, 182');
+      // Use the same 0.08 opacity tint for the default theme
+      document.documentElement.style.setProperty('--bg-color', 'rgba(61, 116, 182, 0.08)');
       document.documentElement.style.setProperty('--brand-text', '#FFFFFF');
     }
 
@@ -386,7 +396,8 @@ const App: React.FC = () => {
                 coverImage: 'https://images.unsplash.com/photo-1517154421773-0529f29ea451?q=80&w=800&auto=format&fit=crop',
                 memberUids: [firebaseUser.uid],
                 ownerUid: firebaseUser.uid,
-                createdAt: new Date().toISOString()
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
               };
               const tripRef = await addDoc(collection(db, 'trips'), tripData);
               const tripId = tripRef.id;
@@ -394,7 +405,12 @@ const App: React.FC = () => {
               for (const col of collections) {
                 const snap = await getDocs(collection(db, col));
                 for (const oldDoc of snap.docs) {
-                  await addDoc(collection(db, 'trips', tripId, col), oldDoc.data());
+                  const data = oldDoc.data();
+                  await addDoc(collection(db, 'trips', tripId, col), {
+                    ...data,
+                    createdAt: data.createdAt || serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                  });
                   await deleteDoc(doc(db, col, oldDoc.id));
                 }
               }
@@ -439,12 +455,7 @@ const App: React.FC = () => {
   }, [trips]);
 
   const getThemeBg = () => {
-    switch (user?.profileTheme) {
-      case 'handdrawn': return 'bg-[#F9F5E6]';
-      case 'hipster': return 'bg-[#FDFCF8]';
-      case 'minimalist': return 'bg-[#F8FAFC]';
-      default: return 'bg-[#FCFBF7]';
-    }
+    return 'bg-transparent';
   };
 
   if (loading) {
@@ -472,7 +483,7 @@ const App: React.FC = () => {
     <div className={`h-screen w-full max-w-md mx-auto flex flex-col relative overflow-hidden transition-colors duration-500 ${getThemeBg()} ${user.profileTheme === 'handdrawn' ? 'font-handdrawn' : user.profileTheme === 'hipster' ? 'font-hipster' : 'font-sans'}`}>
       <BackgroundDoodles user={user} />
       
-      <div className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
+      <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
         <Routes>
           <Route path="/" element={
             <Dashboard 
@@ -573,15 +584,22 @@ const App: React.FC = () => {
 
       {/* Main Bottom Navigation (Only on main tabs) */}
       {!location.pathname.startsWith('/trip/') && (
-        <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[60] ${user.profileTheme === 'handdrawn' ? 'px-0 pt-2' : 'px-6 bottom-3'}`}>
-          <nav className={`
-            ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 
-              (user.profileTheme === 'handdrawn' ? 'bg-white/95 backdrop-blur-sm rounded-none border-t-[1.5px] border-b-0 border-r-0 border-l-0' : 'bg-white rounded-2xl border-[1.5px]') + ' flex items-stretch p-1 relative overflow-visible border-[#4B3F35]/15 shadow-[0_-12px_40px_rgba(75,63,53,0.12)]' : 
-              user.profileTheme === 'hipster' ? 'bg-white/90 backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex' :
-              user.profileTheme === 'watercolor' ? 'bg-white/70 backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex' :
-              'bg-white/90 backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex'} 
-            justify-between
-          `}>
+        <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[60] ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 'px-0 bottom-0' : 'px-6 bottom-3'}`}>
+          <nav 
+            className={`
+              ${user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? 
+                'bg-white/95 backdrop-blur-md rounded-none border-t-[1.5px] flex items-stretch p-1 relative overflow-visible border-[#4B3F35]/15 shadow-[0_-12px_40px_rgba(75,63,53,0.12)]' : 
+                user.profileTheme === 'hipster' ? 'backdrop-blur-md border border-stone-100 shadow-sm rounded-2xl flex pb-1' :
+                user.profileTheme === 'watercolor' ? 'backdrop-blur-xl rounded-[32px] border border-sky-100/20 shadow-sm flex pb-1' :
+                'backdrop-blur-md rounded-[24px] shadow-nav border border-slate-100/50 flex pb-1'} 
+              justify-between
+            `}
+            style={{ 
+              backgroundColor: user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? undefined : 'rgba(255, 255, 255, 0.95)',
+              borderColor: user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? undefined : 'rgba(var(--brand-color-rgb), 0.15)',
+              boxShadow: user.profileTheme === 'handdrawn' || user.profileTheme === 'scrapbook' ? undefined : '0 8px 30px rgba(0,0,0,0.08)'
+            }}
+          >
             {/* Washi Tape Removed */}
 
             <NavButton 
@@ -598,10 +616,10 @@ const App: React.FC = () => {
                   onClick={() => { navigate('/'); setIsCreateModalOpen(true); }}
                   className="flex flex-col items-center group"
                 >
-                  <div className="w-9 h-9 bg-[#FCB64E] rounded-full flex items-center justify-center shadow-sm border border-white/20 transition-transform group-active:scale-95 mb-0.5">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm border border-white/20 transition-transform group-active:scale-95 mb-0.5" style={{ backgroundColor: 'var(--brand-color)' }}>
                     <Plus size={22} strokeWidth={3} className="text-white" />
                   </div>
-                  <span className="text-[9px] font-black text-[#8B5E3C] tracking-widest">新增</span>
+                  <span className="text-[9px] font-black tracking-widest" style={{ color: 'var(--brand-color)' }}>新增</span>
                 </button>
               </div>
             ) : (
@@ -649,14 +667,14 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
         onClick={onClick} 
         className={`flex flex-col items-center justify-center flex-1 py-2 group relative font-handdrawn transition-all`}
       >
-        <div className={`transition-all duration-300 flex items-center justify-center mb-0.5 ${active ? 'text-[#8B5E3C] scale-110' : 'text-stone-300 opacity-80'}`}>
+        <div className={`transition-all duration-300 flex items-center justify-center mb-0.5 ${active ? 'scale-110' : 'text-stone-300 opacity-80'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
           <Icon size={20} strokeWidth={active ? 2.5 : 2} />
         </div>
-        <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${active ? 'text-[#8B5E3C]' : 'text-stone-300'}`}>
+        <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${active ? '' : 'text-stone-300'}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
           {label}
         </span>
         {active && (
-          <div className="absolute -bottom-1 w-6 h-[2px] bg-[#8B5E3C]/30 rounded-full" style={{ clipPath: 'polygon(1% 40%, 99% 2%, 96% 100%, 4% 90%)' }} />
+          <div className="absolute -bottom-1 w-6 h-[2px] rounded-full" style={{ clipPath: 'polygon(1% 40%, 99% 2%, 96% 100%, 4% 90%)', backgroundColor: 'var(--brand-color)', opacity: 0.3 }} />
         )}
       </button>
     );
@@ -664,17 +682,17 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon: Icon, labe
 
   return (
     <button onClick={onClick} className={`flex flex-col items-center justify-center flex-1 py-2 group relative ${isHipster ? 'font-hipster' : isWatercolor ? 'font-sans italic' : ''}`}>
-      <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-stone-300 group-active:scale-90'}`} style={{ color: active ? (isHipster ? '#78716C' : 'var(--brand-color)') : (isWatercolor ? '#A5C4D4' : undefined) }}>
+      <div className={`transition-all duration-300 flex items-center justify-center w-8 h-8 ${active ? 'scale-110' : 'text-stone-300 group-active:scale-90'}`} style={{ color: active ? 'var(--brand-color)' : (isWatercolor ? '#A5C4D4' : undefined) }}>
         <Icon size={20} strokeWidth={active ? 2 : 1.5} />
       </div>
-      <span className={`text-[9px] font-bold mt-0.5 transition-colors duration-300 ${active ? '' : (isWatercolor ? 'text-sky-200' : 'text-stone-300')}`} style={{ color: active ? (isHipster ? '#78716C' : 'var(--brand-color)') : undefined }}>
+      <span className={`text-[9px] font-bold mt-0.5 transition-colors duration-300 ${active ? '' : (isWatercolor ? 'text-sky-200' : 'text-stone-300')}`} style={{ color: active ? 'var(--brand-color)' : undefined }}>
         {label}
       </span>
       {active && !isHipster && (
         <motion.div layoutId="nav-active" className="absolute -bottom-1 w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--brand-color)' }} />
       )}
       {active && isHipster && (
-        <div className="absolute top-1 right-4 w-1 h-1 bg-stone-400 rounded-full" />
+        <div className="absolute top-1 right-4 w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--brand-color)' }} />
       )}
     </button>
   );
