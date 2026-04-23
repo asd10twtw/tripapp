@@ -23,7 +23,8 @@
         "uid": { "type": "string" },
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" },
-        "email": { "type": "string" }
+        "email": { "type": "string" },
+        "profileBg": { "type": "string" }
       },
       "required": ["uid", "displayName", "email"]
     },
@@ -35,6 +36,7 @@
         "id": { "type": "string", "description": "Maps to UserProfile.uid" },
         "name": { "type": "string" },
         "avatar": { "type": "string" },
+        "profileBg": { "type": "string" },
         "color": { "type": "string" }
       },
       "required": ["id", "name", "avatar", "color"]

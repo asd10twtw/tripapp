@@ -274,8 +274,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
         )}
       </AnimatePresence>
 
-      <div className="flex-1 min-h-0 flex flex-col p-6 overflow-hidden bg-transparent">
-      <div className="flex items-center justify-between mb-6 shrink-0">
+      <div className="flex-1 min-h-0 flex flex-col px-6 pt-4 pb-6 overflow-hidden bg-transparent">
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-2">
           {theme === 'handdrawn' || theme === 'scrapbook' ? (
             <div className="flex items-center gap-2">
@@ -321,8 +321,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
         </button>
       </div>
 
-      <div className="mb-6 shrink-0">
-        <label className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] ml-2 mb-3 block">是誰想買？</label>
+      <div className="mb-4 shrink-0">
+        <label className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] ml-2 mb-2 block">是誰想買？</label>
         <div className="flex gap-3 overflow-x-auto no-scrollbar py-1 px-1">
           {members.map(m => (
             <button
@@ -343,7 +343,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
       </div>
 
       <div className={`flex-1 min-h-0 backdrop-blur-sm p-6 flex flex-col ${
-        theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.05)]' : 
+        theme === 'handdrawn' || theme === 'scrapbook' ? 'bg-white border-2 border-[#4B3F35]/15 rounded-xl shadow-[4px_4px_0_0_rgba(75,63,53,0.05)]' : 
         'bg-white/80 rounded-[32px] shadow-soft border border-slate-50'
       }`}>
         <h3 className="text-base font-black text-slate-800 mb-4 shrink-0">{activeMember?.name} 的願望</h3>
@@ -353,7 +353,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
             <div 
               key={item.id} 
               className={`flex flex-col p-4 transition-all ${
-                theme === 'handdrawn' ? 'bg-white border border-[#4B3F35]/10 shadow-[2px_2px_0_0_rgba(75,63,53,0.02)]' : 
+                theme === 'handdrawn' || theme === 'scrapbook' ? 'bg-white border border-[#4B3F35]/15 rounded-xl shadow-[2px_2px_0_0_rgba(75,63,53,0.02)]' : 
                 'bg-white rounded-[24px] border border-slate-100 shadow-sm'
               } ${item.completed ? 'opacity-60' : ''}`}
             >

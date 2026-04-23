@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ScheduleEvent, EventCategory, PreTripTask, Member } from '../types';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../constants';
-import { MapPin, Info, Plus, X, Check, Trash2, Plane, ChevronDown, Clock } from 'lucide-react';
+import { MapPin, Info, Plus, X, Check, Trash2, Plane, ChevronDown, Clock, Settings } from 'lucide-react';
 import { db } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, deleteDoc, updateDoc, doc, arrayUnion, arrayRemove, orderBy, getDoc, setDoc } from 'firebase/firestore';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ScheduleViewProps {
   members: Member[];
@@ -67,6 +68,15 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
   const [newNotes, setNewNotes] = useState('');
   const [newTime, setNewTime] = useState(''); 
   const [newTaskTitle, setNewTaskTitle] = useState('');
+
+  // 航班資訊相關狀態
+  const [flightInfo, setFlightInfo] = useState<{
+    departure?: { from: string, to: string, time: string, arrivalTime?: string, flightNo: string },
+    return?: { from: string, to: string, time: string, arrivalTime?: string, flightNo: string }
+  }>({});
+  const [isFlightModalOpen, setIsFlightModalOpen] = useState(false);
+  const [editingFlightType, setEditingFlightType] = useState<'departure' | 'return' | null>(null);
+  const [editFlightData, setEditFlightData] = useState({ from: '', to: '', time: '', arrivalTime: '', flightNo: '' });
 
   // Swipe gesture state
   const [touchStart, setTouchStart] = useState<{x: number, y: number} | null>(null);
@@ -131,8 +141,39 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
         if (docSnap.data().customCategories) setCustomCategories(docSnap.data().customCategories);
       }
     });
-    return () => unsubscribe();
+
+    const unsubscribeFlight = onSnapshot(doc(db, 'trips', tripId, 'config', 'flightInfo'), (docSnap) => {
+      if (docSnap.exists()) {
+        setFlightInfo(docSnap.data() as any);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeFlight();
+    };
   }, [tripId]);
+
+  const handleSaveFlightInfo = async () => {
+    if (!editingFlightType) return;
+    const updated = { ...flightInfo, [editingFlightType]: editFlightData };
+    setFlightInfo(updated);
+    await setDoc(doc(db, 'trips', tripId, 'config', 'flightInfo'), updated);
+    setIsFlightModalOpen(false);
+  };
+
+  const openFlightEdit = (type: 'departure' | 'return') => {
+    setEditingFlightType(type);
+    const data = flightInfo[type] || { from: '', to: '', time: '', arrivalTime: '', flightNo: '' };
+    setEditFlightData({ 
+      from: data.from || '', 
+      to: data.to || '', 
+      time: data.time || '', 
+      arrivalTime: data.arrivalTime || '', 
+      flightNo: data.flightNo || '' 
+    });
+    setIsFlightModalOpen(true);
+  };
 
   const handleAddNewCategory = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -275,23 +316,25 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="w-full overflow-x-auto no-scrollbar pt-1 pb-4 mb-0 shrink-0">
-        <div className="flex gap-3 px-8 min-w-max">
+      <div className="w-full overflow-x-auto no-scrollbar pt-3 pb-3 mb-0 shrink-0">
+              <div className="flex gap-4 px-8 min-w-max">
           {dates.map((d) => (
             <button
               key={d.val}
               id={`date-tab-${d.val}`}
               onClick={() => setSelectedDate(d.val)}
-              className={`flex-shrink-0 flex flex-col items-center justify-center w-[48px] h-[64px] transition-all duration-500 ${
+              className={`flex-shrink-0 flex flex-col items-center justify-center w-[52px] h-[68px] transition-all duration-300 relative ${
                 selectedDate === d.val
-                  ? 'bg-white shadow-[0_8px_20px_rgba(66,121,179,0.12)] scale-105 z-10'
-                  : 'bg-white border-[1.5px] border-slate-50 text-slate-300 shadow-sm'
-              } ${theme === 'scrapbook' ? 'rounded-xl' : 'rounded-[18px]'}`}
-              style={{ 
-                borderWidth: selectedDate === d.val ? '2px' : '1.5px',
-                borderColor: selectedDate === d.val ? (theme === 'handdrawn' || theme === 'scrapbook' ? 'var(--brand-color)' : 'var(--brand-color)') : undefined,
-              }}
+                  ? 'bg-white shadow-active scale-110 z-10'
+                  : 'bg-white border border-slate-100 text-slate-300 shadow-sm opacity-60'
+              } ${theme === 'scrapbook' ? 'rounded-xl' : theme === 'handdrawn' ? 'rounded-xl' : 'rounded-[18px]'}`}
             >
+              {selectedDate === d.val && (
+                <div 
+                  className="absolute inset-0 rounded-[inherit] border-2 pointer-events-none" 
+                  style={{ borderColor: 'var(--brand-color)' }}
+                />
+              )}
               {d.val === 'PRE_TRIP' ? (
                 <div className="flex flex-col items-center w-full px-1">
                   <span className="text-[8px] font-black text-slate-400 mb-0.5 uppercase tracking-normal w-full text-center">PRE</span>
@@ -369,16 +412,22 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
              </div>
         ) : (
         <>
-            {selectedDate === '2026-01-30' && (
-              <div className="bg-white rounded-[24px] border-2 border-dashed border-sky-400/20 p-4 shadow-soft relative overflow-hidden mb-4">
+            {selectedDate === startDate && (
+              <div 
+                onClick={() => openFlightEdit('departure')}
+                className={`${theme === 'handdrawn' ? 'rounded-xl' : 'rounded-[24px]'} bg-white border-2 border-dashed border-sky-400/20 p-4 shadow-soft relative overflow-hidden mt-1 mb-4 cursor-pointer hover:border-sky-400/40 transition-colors group`}
+              >
                 <div className="flex justify-between items-center mb-4">
-                  <div className="border text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-tighter" style={{ backgroundColor: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.3)', color: 'var(--brand-text)' }}>出發</div>
-                  <div className="text-[10px] font-bold tracking-widest uppercase" style={{ color: 'var(--brand-color)' }}>TPE → ICN</div>
+                  <div className="border text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-tighter" style={{ backgroundColor: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.3)', color: 'var(--brand-text)' }}>出發航班</div>
+                  <div className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1" style={{ color: 'var(--brand-color)' }}>
+                    {flightInfo.departure?.from || 'TPE'} → {flightInfo.departure?.to || 'ICN'}
+                    <Settings size={10} className="opacity-0 group-hover:opacity-50" />
+                  </div>
                 </div>
                 <div className="flex items-center justify-between px-1 mb-2">
                   <div className="text-center">
-                    <h4 className="text-2xl font-bold text-slate-700">TPE</h4>
-                    <div className="bg-slate-50 px-2 py-0.5 rounded-full text-[9px] text-slate-400 mt-1 font-bold">20:00</div>
+                    <h4 className="text-2xl font-bold text-slate-700">{flightInfo.departure?.from || 'TPE'}</h4>
+                    <div className="bg-slate-50 px-2 py-0.5 rounded-full text-[9px] text-slate-400 mt-1 font-bold">{flightInfo.departure?.time || '00:00'}</div>
                   </div>
                   <div className="flex-1 flex flex-col items-center px-3 relative">
                     <Plane size={14} className="mb-1 rotate-45" style={{ color: 'var(--brand-color)' }} />
@@ -386,26 +435,32 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                        <div className="w-1.5 h-1.5 rounded-full -ml-0.5" style={{ backgroundColor: 'var(--brand-color)' }}></div>
                        <div className="w-1.5 h-1.5 rounded-full -mr-0.5" style={{ backgroundColor: 'var(--brand-color)' }}></div>
                     </div>
-                    <span className="text-[8px] text-slate-300 mt-1 font-bold tracking-wider uppercase">IT 602</span>
+                    <span className="text-[8px] text-slate-300 mt-1 font-bold tracking-wider uppercase">{flightInfo.departure?.flightNo || '---'}</span>
                   </div>
                   <div className="text-center">
-                    <h4 className="text-2xl font-bold text-slate-700">ICN</h4>
-                    <div className="bg-slate-50 px-2 py-0.5 rounded-full text-[9px] text-slate-400 mt-1 font-bold">23:30</div>
+                    <h4 className="text-2xl font-bold text-slate-700">{flightInfo.departure?.to || 'ICN'}</h4>
+                    <div className="bg-slate-50 px-2 py-0.5 rounded-full text-[9px] text-slate-400 mt-1 font-bold">{flightInfo.departure?.arrivalTime || '---'}</div>
                   </div>
                 </div>
               </div>
             )}
 
-            {selectedDate === '2026-02-05' && (
-              <div className="bg-white rounded-[24px] border-2 border-dashed border-sky-400/20 p-4 shadow-soft relative overflow-hidden mb-4">
+            {selectedDate === endDate && (
+              <div 
+                onClick={() => openFlightEdit('return')}
+                className={`${theme === 'handdrawn' ? 'rounded-xl' : 'rounded-[24px]'} bg-white border-2 border-dashed border-rose-400/20 p-4 shadow-soft relative overflow-hidden mt-1 mb-4 cursor-pointer hover:border-rose-400/40 transition-colors group`}
+              >
                 <div className="flex justify-between items-center mb-4">
-                  <div className="border text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-tighter" style={{ backgroundColor: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.3)', color: 'var(--brand-text)' }}>抵達</div>
-                  <div className="text-[10px] font-bold tracking-widest uppercase" style={{ color: 'var(--brand-color)' }}>ICN → TPE</div>
+                  <div className="border text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-tighter" style={{ backgroundColor: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.3)', color: 'var(--brand-text)' }}>回程航班</div>
+                  <div className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1" style={{ color: 'var(--brand-color)' }}>
+                    {flightInfo.return?.from || 'ICN'} → {flightInfo.return?.to || 'TPE'}
+                    <Settings size={10} className="opacity-0 group-hover:opacity-50" />
+                  </div>
                 </div>
                 <div className="flex items-center justify-between px-1 mb-2">
                   <div className="text-center">
-                    <h4 className="text-2xl font-bold text-slate-700">ICN</h4>
-                    <div className="bg-slate-50 px-2 py-0.5 rounded-full text-[9px] text-slate-400 mt-1 font-bold">16:20</div>
+                    <h4 className="text-2xl font-bold text-slate-700">{flightInfo.return?.from || 'ICN'}</h4>
+                    <div className="bg-slate-50 px-2 py-0.5 rounded-full text-[9px] text-slate-400 mt-1 font-bold">{flightInfo.return?.time || '00:00'}</div>
                   </div>
                   <div className="flex-1 flex flex-col items-center px-3 relative">
                     <Plane size={14} className="mb-1 rotate-45" style={{ color: 'var(--brand-color)' }} />
@@ -413,11 +468,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                        <div className="w-1.5 h-1.5 rounded-full -ml-0.5" style={{ backgroundColor: 'var(--brand-color)' }}></div>
                        <div className="w-1.5 h-1.5 rounded-full -mr-0.5" style={{ backgroundColor: 'var(--brand-color)' }}></div>
                     </div>
-                    <span className="text-[8px] text-slate-300 mt-1 font-bold tracking-wider uppercase">KE 2027</span>
+                    <span className="text-[8px] text-slate-300 mt-1 font-bold tracking-wider uppercase">{flightInfo.return?.flightNo || '---'}</span>
                   </div>
                   <div className="text-center">
-                    <h4 className="text-2xl font-bold text-slate-700">TPE</h4>
-                    <div className="bg-slate-50 px-2 py-0.5 rounded-full text-[9px] text-slate-400 mt-1 font-bold">18:10</div>
+                    <h4 className="text-2xl font-bold text-slate-700">{flightInfo.return?.to || 'TPE'}</h4>
+                    <div className="bg-slate-50 px-2 py-0.5 rounded-full text-[9px] text-slate-400 mt-1 font-bold">{flightInfo.return?.arrivalTime || '---'}</div>
                   </div>
                 </div>
               </div>
@@ -425,14 +480,22 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
 
             <button 
                 onClick={openAddModal}
-                className={`w-full font-black py-4 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all mb-4 border ${
-                  theme === 'scrapbook' ? 'rounded-xl bg-[#8B5E3C] text-white border-[#8B5E3C] shadow-active' : 
-                  theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35]/15 shadow-[4px_4px_0_0_rgba(75,63,53,0.05)] text-[#4B3F35]' :
+                className={`w-full font-black py-4 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all mb-4 relative overflow-hidden ${
+                  theme === 'scrapbook' ? 'rounded-xl bg-[#8B5E3C] text-white shadow-active' : 
+                  theme === 'handdrawn' ? 'rounded-xl bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.15)] text-[#4B3F35]' :
                   'rounded-2xl shadow-active'
                 }`}
-                style={(!['scrapbook', 'handdrawn'].includes(theme || '')) ? { backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)', borderColor: 'rgba(var(--brand-color-rgb), 0.2)' } : {}}
+                style={(!['scrapbook', 'handdrawn'].includes(theme || '')) ? { backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' } : {}}
             >
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-sm ${
+              {/* 強制顯示的邊框層 */}
+              <div 
+                className="absolute inset-0 rounded-[inherit] border-2 border-solid pointer-events-none" 
+                style={{ 
+                  borderColor: theme === 'handdrawn' ? 'rgba(75, 63, 53, 0.25)' : 
+                               (theme === 'scrapbook' ? '#8B5E3C' : 'rgba(var(--brand-color-rgb), 0.2)') 
+                }} 
+              />
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-sm relative z-10 ${
                 theme === 'scrapbook' ? 'bg-white/20' : 
                 theme === 'handdrawn' ? 'bg-[#4B3F35] text-white' :
                 'bg-white/20'
@@ -455,19 +518,19 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                         ? 'bg-white border border-stone-200 shadow-sm rotate-[0.5deg] mb-6' 
                       : theme === 'hipster'
                         ? 'bg-white border border-stone-100 shadow-sm mb-6'
-                        : theme === 'handdrawn'
-                        ? 'bg-white border-[1.5px] border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.03)] rotate-[0.5deg] mb-6'
-                        : 'bg-white rounded-[24px] border border-slate-50 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4'
+                      : theme === 'handdrawn'
+                        ? 'bg-white border-[1.5px] border-[#4B3F35]/15 rounded-xl shadow-[4px_4px_0_0_rgba(75,63,53,0.03)] mb-6'
+                        : 'bg-white rounded-2xl border border-slate-50 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4'
                     }`}
                 >
-                    {(theme === 'handdrawn' || theme === 'scrapbook' || theme === 'hipster') && (
-                      <div className="absolute -left-8 top-1/2 -translate-y-1/2 flex flex-col items-center">
-                        <div className={`w-3 h-3 rounded-full bg-white border-2 z-10 ${theme === 'hipster' ? 'border-stone-400 scale-90' : ''}`} style={theme === 'handdrawn' || theme === 'scrapbook' ? { borderColor: 'var(--brand-color)' } : {}} />
-                        {event.time && (
-                          <span className={`text-[8px] font-black mt-1 whitespace-nowrap -rotate-90 ${theme === 'hipster' ? 'text-stone-300 font-hipster' : 'text-stone-400'}`}>{event.time}</span>
-                        )}
-                      </div>
-                    )}
+                            {(theme === 'scrapbook' || theme === 'hipster') && (
+                              <div className="absolute -left-8 top-1/2 -translate-y-1/2 flex flex-col items-center">
+                                <div className={`w-3 h-3 rounded-full bg-white border-2 z-10 ${theme === 'hipster' ? 'border-stone-400 scale-90' : ''}`} style={theme === 'handdrawn' || theme === 'scrapbook' ? { borderColor: 'var(--brand-color)' } : {}} />
+                                {event.time && (
+                                  <span className={`text-[8px] font-black mt-1 whitespace-nowrap -rotate-90 ${theme === 'hipster' ? 'text-stone-300 font-hipster' : 'text-stone-400'}`}>{event.time}</span>
+                                )}
+                              </div>
+                            )}
                     {(theme === 'handdrawn' || theme === 'scrapbook') && (
                       <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-3 washi-tape-grid border-x border-black/5 rotate-[-1deg] ${
                         idx % 3 === 0 ? 'bg-amber-200/40' : idx % 3 === 1 ? 'bg-rose-200/40' : 'bg-sky-200/40'
@@ -615,6 +678,101 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
           </div>
         </div>
       )}
+      {/* Flight Edit Modal */}
+      <AnimatePresence>
+        {isFlightModalOpen && (
+          <div className="fixed inset-0 z-[200] bg-black/40 backdrop-blur-md flex items-center justify-center p-6 text-left">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-[390px] rounded-[32px] p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto no-scrollbar"
+            >
+              <div className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-sky-50 flex items-center justify-center text-sky-500">
+                    <Plane size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-800">
+                      編輯{editingFlightType === 'departure' ? '出發' : '回程'}航班
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Flight Information</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsFlightModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 active:scale-90 transition-transform">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">出發地 (代碼)</label>
+                    <input 
+                      type="text" 
+                      placeholder="例如: TPE"
+                      value={editFlightData.from}
+                      onChange={(e) => setEditFlightData({ ...editFlightData, from: e.target.value.toUpperCase() })}
+                      className="w-full px-5 py-3.5 bg-slate-50 rounded-2xl border-none outline-none text-sm font-bold text-slate-700"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">目的地 (代碼)</label>
+                    <input 
+                      type="text" 
+                      placeholder="例如: ICN"
+                      value={editFlightData.to}
+                      onChange={(e) => setEditFlightData({ ...editFlightData, to: e.target.value.toUpperCase() })}
+                      className="w-full px-5 py-3.5 bg-slate-50 rounded-2xl border-none outline-none text-sm font-bold text-slate-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">航班編號</label>
+                  <input 
+                    type="text" 
+                    placeholder="例如: BR 123"
+                    value={editFlightData.flightNo}
+                    onChange={(e) => setEditFlightData({ ...editFlightData, flightNo: e.target.value.toUpperCase() })}
+                    className="w-full px-5 py-3.5 bg-slate-50 rounded-2xl border-none outline-none text-sm font-bold text-slate-700"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">起飛時間</label>
+                    <input 
+                      type="time" 
+                      value={editFlightData.time}
+                      onChange={(e) => setEditFlightData({ ...editFlightData, time: e.target.value })}
+                      className="w-full px-1 py-3.5 bg-slate-50 rounded-2xl border-none outline-none text-[13px] font-bold text-slate-700 focus:ring-2 focus:ring-sky-500/20 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">到達時間</label>
+                    <input 
+                      type="time" 
+                      value={editFlightData.arrivalTime}
+                      onChange={(e) => setEditFlightData({ ...editFlightData, arrivalTime: e.target.value })}
+                      className="w-full px-1 py-3.5 bg-slate-50 rounded-2xl border-none outline-none text-[13px] font-bold text-slate-700 focus:ring-2 focus:ring-sky-500/20 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleSaveFlightInfo}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all mt-4"
+                  style={{ backgroundColor: 'var(--brand-color)' }}
+                >
+                  確認儲存
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

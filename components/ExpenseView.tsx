@@ -465,7 +465,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                       return (
                           <div key={exp.id} onClick={() => openEditModal(exp)} className={`py-4 px-4 flex flex-col gap-3 cursor-pointer active:scale-[0.98] transition-all relative ${
                             theme === 'handdrawn' || theme === 'scrapbook'
-                              ? 'bg-white border border-[#4B3F35]/10 shadow-sm rotate-[0.1deg]'
+                              ? 'bg-white border border-[#4B3F35]/15 shadow-sm rounded-xl rotate-[0.1deg]'
                               : 'bg-white rounded-2xl shadow-soft border border-slate-50'
                           }`}>
                           {(theme === 'scrapbook' || theme === 'handdrawn') && (

@@ -58,6 +58,7 @@ service cloud.firestore {
              (!('githubId' in data) || (data.githubId is string || data.githubId is number)) &&
              (!('githubUsername' in data) || (data.githubUsername is string)) &&
              (!('githubUrl' in data) || (data.githubUrl is string)) &&
+             (!('profileBg' in data) || (data.profileBg is string && data.profileBg.size() <= 2000000)) &&
              (!('updatedAt' in data) || (data.updatedAt in [request.time, null] || data.updatedAt is string || data.updatedAt is timestamp));
     }
 
@@ -81,6 +82,7 @@ service cloud.firestore {
       return (!('id' in data) || (data.id is string)) &&
              (!('name' in data) || (data.name is string && data.name.size() <= 200)) &&
              (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 2000000)) &&
+             (!('profileBg' in data) || (data.profileBg is string && data.profileBg.size() <= 2000000)) &&
              (!('color' in data) || (data.color is string)) &&
              (!('legacyIds' in data) || (data.legacyIds is list)) &&
              (!('claimedBy' in data) || (data.claimedBy is string)) &&
@@ -115,7 +117,7 @@ service cloud.firestore {
       allow update: if (isOwner(uid) || isAdmin()) && isValidUserProfile(incoming()) &&
                     incoming().diff(existing()).affectedKeys().hasOnly([
                       'displayName', 'photoURL', 'profileTheme', 'themeColor', 'email',
-                      'motto', 'location', 'interests', 'githubId', 'githubUsername', 'githubUrl', 'updatedAt'
+                      'motto', 'location', 'interests', 'githubId', 'githubUsername', 'githubUrl', 'updatedAt', 'profileBg'
                     ]);
     }
 

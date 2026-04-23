@@ -42,20 +42,39 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
     }, 0);
     setTotalTravelDays(days);
 
-    // Calculate top city (Most visited destination) - now supporting split cities with '+'
-    const cityCounts: Record<string, number> = {};
+    // Calculate top city (Most visited destination)
+    const now = new Date().getTime();
+    const cityStats: Record<string, { count: number, latestCompletedDate: number }> = {};
     trips.forEach(t => {
       if (t.city) {
         const individualCities = t.city.split(/[\+]+/).filter(Boolean);
+        const tripEndDate = t.endDate ? new Date(t.endDate).getTime() : 0;
+        const isCompleted = tripEndDate > 0 && tripEndDate <= now;
+        
         individualCities.forEach(city => {
           const trimmedCity = city.trim();
           if (trimmedCity) {
-            cityCounts[trimmedCity] = (cityCounts[trimmedCity] || 0) + 1;
+            if (!cityStats[trimmedCity]) {
+              cityStats[trimmedCity] = { count: 0, latestCompletedDate: 0 };
+            }
+            cityStats[trimmedCity].count += 1;
+            // Only update latest date if the trip is actually COMPLETED
+            if (isCompleted && tripEndDate > cityStats[trimmedCity].latestCompletedDate) {
+              cityStats[trimmedCity].latestCompletedDate = tripEndDate;
+            }
           }
         });
       }
     });
-    const sortedCities = Object.entries(cityCounts).sort((a, b) => b[1] - a[1]);
+
+    const sortedCities = Object.entries(cityStats).sort((a, b) => {
+      // Sort by count DESC, then by latestCompletedDate DESC
+      if (b[1].count !== a[1].count) {
+        return b[1].count - a[1].count;
+      }
+      return b[1].latestCompletedDate - a[1].latestCompletedDate;
+    });
+
     if (sortedCities.length > 0) {
       setTopCityStat(sortedCities[0][0]);
     }
@@ -63,64 +82,69 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
     // Calculate personal annual spending - Sync logic with ExpenseView.tsx for absolute accuracy
     const fetchSpending = async () => {
       let grandTotal = 0;
+      const currentYear = new Date().getFullYear();
+      
       try {
         const spendingResults = await Promise.all(trips.map(async (trip) => {
-          let tripTotalShare = 0;
+          // Check if the trip belongs to the current year and is completed
+          const tripYear = trip.startDate ? new Date(trip.startDate).getFullYear() : null;
+          if (tripYear !== currentYear) return 0;
           
-          // Only count spending for completed trips
-          const isCompleted = new Date(trip.endDate) < new Date();
+          // Only count spending for completed trips (endDate has passed)
+          const isCompleted = trip.endDate ? new Date(trip.endDate) < new Date() : false;
           if (!isCompleted) return 0;
 
-          // Fetch the latest exchange rate from trip settings (same as ExpenseView)
+          let tripTotalShare = 0;
+          
+          // Fetch the latest exchange rates from trip settings
           const settingsSnap = await getDoc(doc(db, 'trips', trip.id, 'config', 'settings'));
-          const exchangeRateNum = settingsSnap.exists() ? Number(settingsSnap.data().exchangeRate || 0.0245) : 0.0245;
+          const exchangeRate = settingsSnap.exists() ? Number(settingsSnap.data().exchangeRate || 0.0245) : 0.0245;
+          const jpyRate = settingsSnap.exists() ? Number(settingsSnap.data().jpyRate || 0.21) : 0.21;
 
           const expensesSnap = await getDocs(collection(db, 'trips', trip.id, 'expenses'));
+          
+          // Mimic ExpenseView getMyCategoryData logic
+          const myUid = user.uid;
           expensesSnap.forEach(doc => {
             const exp = doc.data() as Expense;
-            const myUid = user.uid;
             
-            // 1. Calculate the TWD value of the expense (Same as ExpenseView settlement)
-            const amtKRW = Number(exp.amountKRW || 0);
-            const amtTWD = Number(exp.amountTWD || 0);
-            const currentTWD = exp.currency === 'KRW' 
-              ? amtKRW * exchangeRateNum 
-              : amtTWD;
+            // Normalize participant IDs (handle legacy 'm2' mapping)
+            const splitIds = (exp.splitWithIds || []).map(id => id === 'm2' ? myUid : id);
+            
+            if (splitIds.includes(myUid)) {
+              let myShare = 0;
+              let currentTWD = 0;
+              
+              if (exp.currency === 'KRW') currentTWD = Math.round(exp.amountKRW * exchangeRate);
+              else if (exp.currency === 'JPY') currentTWD = Math.round((exp.amountJPY || 0) * jpyRate);
+              else currentTWD = exp.amountTWD;
+              
+              // Handle custom splits or simple split
+              if (exp.customSplits) {
+                // Normalize customSplits keys
+                const normalizedSplits: Record<string, number> = {};
+                Object.entries(exp.customSplits).forEach(([id, val]) => {
+                  normalizedSplits[id === 'm2' ? myUid : id] = val;
+                });
 
-            // 2. Identify participants (Normalizing generic m1/m2/m3 to actual UIDs if needed)
-            // In these apps, m2 often refers to the primary user if legacy
-            // We'll check if myUid or 'm2' represents me in this trip context
-            const splitWithIds = (exp.splitWithIds || []).map(id => id === 'm2' ? myUid : id);
-            const customSplits: Record<string, number> = {};
-            if (exp.customSplits) {
-              Object.entries(exp.customSplits).forEach(([id, val]) => {
-                customSplits[id === 'm2' ? myUid : id] = val;
-              });
-            }
-
-            // 3. Determine My Share
-            if (exp.customSplits && Object.keys(customSplits).length > 0) {
-              // Custom split: direct amount
-              const myPartRaw = customSplits[myUid];
-              if (myPartRaw !== undefined) {
-                const shareTWD = exp.currency === 'KRW' 
-                  ? Number(myPartRaw) * exchangeRateNum 
-                  : Number(myPartRaw);
-                tripTotalShare += shareTWD;
+                if (normalizedSplits[myUid] !== undefined) {
+                  if (exp.currency === 'KRW') myShare = normalizedSplits[myUid] * exchangeRate;
+                  else if (exp.currency === 'JPY') myShare = normalizedSplits[myUid] * jpyRate;
+                  else myShare = normalizedSplits[myUid];
+                }
+              } else {
+                myShare = splitIds.length > 0 ? currentTWD / splitIds.length : 0;
               }
-            } else {
-              // Simple split or 100% if empty
-              const participants = splitWithIds.length > 0 ? splitWithIds : [exp.payerId === 'm2' ? myUid : exp.payerId];
-              if (participants.includes(myUid)) {
-                tripTotalShare += currentTWD / participants.length;
-              }
+              
+              tripTotalShare += myShare;
             }
           });
-          return tripTotalShare;
+          
+          return Math.round(tripTotalShare);
         }));
         
         grandTotal = spendingResults.reduce((acc, val) => acc + val, 0);
-        setAnnualSpending(Math.round(grandTotal));
+        setAnnualSpending(grandTotal);
       } catch (err) {
         console.error('Failed to fetch spending:', err);
       }
@@ -523,13 +547,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                 </div>
               )}
               
-              <p className={`mt-3 text-xs font-medium leading-relaxed ${
-                user.profileTheme === 'handdrawn' ? 'text-[10px] text-[#4B3F35]/80 italic font-handdrawn' : 
-                user.profileTheme === 'hipster' ? 'text-[10px] text-stone-500 font-hipster italic border-l-2 border-stone-200 pl-3 mt-4' :
-                'text-[10px] text-slate-500'
-              }`}>
-                「{user.motto || '慢行，是最美的風景'}」
-              </p>
+              {user.motto && (
+                <p className={`mt-3 text-xs font-medium leading-relaxed ${
+                  user.profileTheme === 'handdrawn' ? 'text-[10px] text-[#4B3F35]/80 italic font-handdrawn' : 
+                  user.profileTheme === 'hipster' ? 'text-[10px] text-stone-500 font-hipster italic border-l-2 border-stone-200 pl-3 mt-4' :
+                  'text-[10px] text-slate-500'
+                }`}>
+                  「{user.motto}」
+                </p>
+              )}
 
               {(user.profileTheme === 'minimalist' || !user.profileTheme || user.profileTheme === 'handdrawn') && user.interests && user.interests.length > 0 && (
                 <div className={`mt-3 flex flex-wrap gap-1.5 ${user.profileTheme === 'handdrawn' ? 'font-handdrawn' : ''}`}>
@@ -576,7 +602,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
           <StatCard 
             icon={<Award size={18} className={user.profileTheme === 'handdrawn' ? 'text-amber-500' : user.profileTheme === 'hipster' ? 'text-stone-400' : 'text-sky-400'} />} 
             value={trips.length} 
-            label={user.profileTheme === 'handdrawn' ? "已解鎖成就" : "已完成旅程"} 
+            label="旅行足跡" 
             theme={user.profileTheme}
           />
           <StatCard 
@@ -588,7 +614,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
           <StatCard 
             icon={<MapPin size={18} className={user.profileTheme === 'handdrawn' ? 'text-sky-400' : user.profileTheme === 'hipster' ? 'text-stone-400' : 'text-emerald-400'} />} 
             value={topCityStat} 
-            label={user.profileTheme === 'handdrawn' ? "喜歡的城市" : "常去城市"} 
+            label="最常去的城市" 
             theme={user.profileTheme}
           />
           <StatCard 
@@ -910,8 +936,8 @@ const StatCard: React.FC<{ icon: React.ReactNode, value: string | number, label:
         const randomIndex = Math.abs(label.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 4;
         
         let finalColor = colors[randomIndex];
-        if (label.includes('旅程') || label.includes('成就')) finalColor = 'bg-[#FEF9C3]/50'; 
-        if (label.includes('行程') || label.includes('天數')) finalColor = 'bg-[#DBEAFE]/50'; 
+        if (label.includes('足跡') || label.includes('成就')) finalColor = 'bg-[#FEF9C3]/50'; 
+        if (label.includes('天數')) finalColor = 'bg-[#DBEAFE]/50'; 
         if (label.includes('城市')) finalColor = 'bg-[#FFEDD5]/50'; 
         if (label.includes('消費')) finalColor = 'bg-[#F3E8FF]/50'; 
         
@@ -926,9 +952,9 @@ const StatCard: React.FC<{ icon: React.ReactNode, value: string | number, label:
     <div className={`${getCardStyle()} p-3 pt-5 flex flex-col items-center text-center relative`}>
       {theme === 'handdrawn' && (
         <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-10 h-4 washi-tape-grid rotate-1 z-10 border-x border-black/5 shadow-sm opacity-80 ${
-          label.includes('旅程') || label.includes('成就') ? 'bg-[#FEF9C3]' : 
+          label.includes('足跡') || label.includes('成就') ? 'bg-[#FEF9C3]' : 
           label.includes('城市') ? 'bg-[#FFEDD5]' : 
-          label.includes('行程') || label.includes('天數') ? 'bg-[#DBEAFE]' : 
+          label.includes('天數') ? 'bg-[#DBEAFE]' : 
           label.includes('消費') ? 'bg-[#F3E8FF]' : 'bg-slate-300'
         }`} />
       )}

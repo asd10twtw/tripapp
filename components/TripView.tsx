@@ -6,6 +6,7 @@ import { ScheduleView } from './ScheduleView';
 import { ExpenseView } from './ExpenseView';
 import { PlanningView } from './PlanningView';
 import { JournalView } from './JournalView';
+import { MemberProfileModal } from './MemberProfileModal';
 import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, ChevronRight, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDocs, query, orderBy, addDoc, limit, arrayUnion, deleteDoc, writeBatch, where, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -45,6 +46,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   const [newMemberName, setNewMemberName] = useState('');
   const [isDeleteTripModalOpen, setIsDeleteTripModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
+  const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   
   // Cropping state
@@ -571,7 +573,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     <div className={`h-full flex flex-col w-full max-w-md mx-auto relative overflow-hidden transition-colors duration-500`}>
       {/* Background doodles are handled by App.tsx */}
       {/* Header */}
-      <div className={`px-6 pt-8 pb-4 shrink-0 flex flex-col gap-4 relative z-30`} style={{ 
+      <div className={`px-6 pt-8 pb-2 shrink-0 flex flex-col gap-4 relative z-30`} style={{ 
         backgroundColor: 'transparent'
       }}>
         {/* Top Bar: Back, Share, Settings */}
@@ -637,9 +639,9 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                   : (trip?.name || 'SEOUL GO')}
               </h1>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-hidden">
               {trip?.subtitle && (
-                <span className={`text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-normal ${
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-normal whitespace-nowrap shrink-0 ${
                   user.profileTheme === 'handdrawn' ? 'bg-[#4B3F35] text-white' : 
                   user.profileTheme === 'scrapbook' ? 'bg-[#8B5E3C] text-white shadow-sm' :
                   'text-white'
@@ -647,7 +649,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                   {trip.subtitle}
                 </span>
               )}
-              <div className={`text-[11px] font-black tracking-normal ${
+              <div className={`text-[11px] font-black tracking-normal whitespace-nowrap shrink-0 ${
                 user.profileTheme === 'handdrawn' ? '' : 
                 user.profileTheme === 'scrapbook' ? 'text-stone-400' :
                 'text-slate-400'
@@ -657,11 +659,12 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
             </div>
           </div>
 
-          <div className="flex -space-x-2 mt-1 shrink-0 flex-wrap justify-end max-w-[120px]">
+          <div className={`flex mt-1 shrink-0 flex-nowrap justify-end ${members.length > 5 ? '-space-x-4' : members.length > 3 ? '-space-x-2' : 'gap-1'}`}>
             {members.map((m, idx) => (
-              <div 
+              <button 
                 key={m.id} 
-                className={`w-7 h-7 rounded-full border-2 overflow-hidden shadow-sm -ml-2 first:ml-0 ${
+                onClick={() => setViewingProfileId(m.id)}
+                className={`w-7 h-7 rounded-full border-2 overflow-hidden shadow-sm active:scale-90 transition-transform cursor-pointer shrink-0 ${
                   user.profileTheme === 'handdrawn' ? 'border-[#4B3F35]/30' : 
                   user.profileTheme === 'scrapbook' ? 'border-white' :
                   'border-white bg-slate-100'
@@ -669,7 +672,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 style={{ zIndex: members.length - idx }}
               >
                 <img src={m.avatar} alt={m.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -708,7 +711,19 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
           </div>
         )}
         
-        <AnimatePresence mode="wait">
+        {/* Member Profile Modal */}
+      <AnimatePresence>
+        {viewingProfileId && (
+          <MemberProfileModal 
+            memberId={viewingProfileId}
+            onClose={() => setViewingProfileId(null)}
+            initialName={members.find(m => m.id === viewingProfileId)?.name}
+            initialAvatar={members.find(m => m.id === viewingProfileId)?.avatar}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 10 }}
@@ -1029,9 +1044,13 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                   <div className="space-y-3">
                     {members.map(m => (
                       <div key={m.id} className={`flex items-center gap-4 p-3 ${user.profileTheme === 'handdrawn' ? '' : 'bg-slate-50 rounded-2xl border border-slate-100'}`}>
-                        <div className="relative group">
+                        <button 
+                          onClick={() => setViewingProfileId(m.id)}
+                          className="relative group active:scale-95 transition-transform"
+                        >
                           <img src={m.avatar} alt={m.name} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" />
-                        </div>
+                          <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition-colors rounded-full" />
+                        </button>
                         <div className="flex-1 min-w-0">
                           <MemberNameInput member={m} onUpdate={handleUpdateMemberName} />
                         </div>
@@ -1056,7 +1075,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 </button>
                 <button 
                   onClick={() => setIsSettingsOpen(false)}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
+                  className="w-full py-4 bg-slate-900 text-white rounded-xl font-black text-sm shadow-xl active:scale-95 transition-all"
                 >
                   完成設定
                 </button>

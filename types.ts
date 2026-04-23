@@ -23,6 +23,7 @@ export interface UserProfile {
   location?: string;
   interests?: string[];
   profileTheme?: 'hipster' | 'minimalist' | 'scrapbook' | 'handdrawn';
+  profileBg?: string;
 }
 
 export interface Member {
@@ -30,6 +31,7 @@ export interface Member {
   name: string;
   color: string;
   avatar: string;
+  profileBg?: string;
   legacyIds?: string[]; // Original placeholder IDs for data mapping
 }
 

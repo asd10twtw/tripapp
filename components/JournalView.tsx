@@ -299,8 +299,8 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, curre
         )}
       </AnimatePresence>
 
-      <div className="flex-1 min-h-0 flex flex-col p-6 overflow-y-auto no-scrollbar journal-container bg-transparent">
-        <div className="flex items-center gap-2 mb-6">
+      <div className="flex-1 min-h-0 flex flex-col px-6 pt-4 pb-6 overflow-y-auto no-scrollbar journal-container bg-transparent">
+        <div className="flex items-center gap-2 mb-4">
           {theme === 'handdrawn' || theme === 'scrapbook' ? (
             <div className="w-12 h-12 flex items-center justify-center shrink-0">
                <img 
@@ -329,8 +329,8 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, curre
           <h2 className={`text-xl font-black tracking-tight ${(theme === 'handdrawn' || theme === 'scrapbook') ? 'text-stone-700' : theme === 'hipster' ? 'text-stone-800 font-hipster uppercase tracking-widest' : 'text-slate-800'}`}>旅行日誌</h2>
         </div>
 
-        <div className="mb-6">
-          <label className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] ml-2 mb-3 block">是誰寫的？</label>
+        <div className="mb-4">
+          <label className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] ml-2 mb-2 block">是誰寫的？</label>
           <div className="flex gap-3 overflow-x-auto no-scrollbar py-1 px-1">
             {members.map(m => (
               <button
@@ -351,7 +351,7 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, curre
         </div>
 
         <div className={`flex flex-col p-6 mb-8 shrink-0 ${
-          theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35]/10 shadow-[4px_4px_0_0_rgba(75,63,53,0.05)]' : 
+          theme === 'handdrawn' || theme === 'scrapbook' ? 'bg-white border-2 border-[#4B3F35]/15 rounded-xl shadow-[4px_4px_0_0_rgba(75,63,53,0.05)]' : 
           'bg-white rounded-[32px] shadow-soft border border-slate-50'
         }`}>
           <h3 className="text-base font-black text-slate-800 mb-4 items-center flex justify-between">
@@ -433,7 +433,7 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, curre
             
             return (
               <div key={entry.id} className={`${
-                theme === 'handdrawn' ? 'bg-white p-5 border border-[#4B3F35]/10 shadow-[2px_2px_0_0_rgba(75,63,53,0.02)]' : 
+                theme === 'handdrawn' || theme === 'scrapbook' ? 'bg-white p-5 border border-[#4B3F35]/15 rounded-xl shadow-[2px_2px_0_0_rgba(75,63,53,0.02)]' : 
                 'bg-white p-5 rounded-[24px] shadow-soft border border-slate-50'
               } transition-all`}>
                 <div className="flex items-center gap-2 mb-3">

@@ -6,10 +6,8 @@
   --font-hand: "Gaegu", cursive;
   --font-chenyu: "Zhi Mang Xing", cursive;
   --font-patrick: "Patrick Hand", cursive;
-  --font-raleway: "Raleway", sans-serif;
   --font-qingsong: "Ma Shan Zheng", cursive;
-  --font-yozai: "Yuji Shuky", serif;
-  --font-hipster: "Raleway", "Noto Serif TC", "Yuji Syuku", serif;
+  --font-hipster: "Noto Serif TC", serif;
   --font-handdrawn: "Nunito", "jf-openhuninn", "Kosugi Maru", "Noto Sans TC", cursive;
 
   --color-paper: #FFFFFF;
@@ -44,7 +42,7 @@ body {
 /* Global Theme Styles */
 body.theme-hipster {
   background-color: var(--bg-color);
-  font-family: 'Raleway', 'Noto Serif TC', 'Yuji Syuku', serif;
+  font-family: 'Noto Serif TC', serif;
   font-weight: 300;
   color: #57534E;
 }
