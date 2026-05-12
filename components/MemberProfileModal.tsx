@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { UserProfile } from '../types';
+import { Trip, UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, MapPin, Award, Calendar, Sparkles, Heart, Compass, Plane, Tent, Ticket, Camera, Footprints, Flag, Loader2, Image as ImageIcon, Check, Scissors } from 'lucide-react';
+import { X, MapPin, Award, Calendar, Sparkles, Heart, Compass, Plane, Tent, Ticket, Camera, Footprints, Flag, Loader2, Image as ImageIcon, Check, Scissors, ChevronRight } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import Cropper from 'react-easy-crop';
@@ -20,6 +20,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
   const [tripCount, setTripCount] = useState(0);
   const [totalDays, setTotalDays] = useState(0);
   const [topCity, setTopCity] = useState("尚未探索");
+  const [publicTrips, setPublicTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,32 +44,64 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
           setProfile(userDocSnap.data() as UserProfile);
         }
 
-        // Fetch Real Trip Data
+        // Fetch Real Trip Data - Ensure membership is strictly checked
         const tripsQuery = query(
           collection(db, 'trips'),
           where('memberUids', 'array-contains', memberId)
         );
         const tripsSnap = await getDocs(tripsQuery);
-        setTripCount(tripsSnap.size);
+        const tripsDocs = tripsSnap.docs || [];
+        
+        // Ensure user is truly a member before showing
+        const validTripsItems = tripsDocs.filter(doc => {
+          const tripData = doc.data();
+          return tripData && tripData.memberUids && Array.isArray(tripData.memberUids) && tripData.memberUids.includes(memberId);
+        });
+
+        setTripCount(validTripsItems.length);
+
+        // Filter public trips for display with deep validation
+        const publicDocs = validTripsItems
+          .map(doc => ({ id: doc.id, ...doc.data() } as Trip))
+          .filter(t => t && t.isPublic);
+        
+        // Safety check to ensure subcollection document exists
+        const verifiedPublicTrips: Trip[] = [];
+        for (const trip of publicDocs) {
+          try {
+            const memberDocRef = doc(db, 'trips', trip.id, 'members', memberId);
+            const memberSnap = await getDoc(memberDocRef);
+            if (memberSnap.exists()) {
+              verifiedPublicTrips.push(trip);
+            }
+          } catch (e) {
+             console.error("Deep validation failed for trip:", trip.id, e);
+          }
+        }
+        setPublicTrips(verifiedPublicTrips);
 
         let days = 0;
         const now = new Date().getTime();
         const cityStats: Record<string, { count: number, latestCompletedDate: number }> = {};
 
-        tripsSnap.docs.forEach(doc => {
+        tripsDocs.forEach(doc => {
           const trip = doc.data();
+          if (!trip) return;
+
           // Calculate Days
           if (trip.startDate && trip.endDate) {
             const start = new Date(trip.startDate);
             const end = new Date(trip.endDate);
-            const diff = Math.abs(end.getTime() - start.getTime());
-            days += (Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1);
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+              const diff = Math.abs(end.getTime() - start.getTime());
+              days += (Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1);
+            }
           }
           // Process Cities
-          if (trip.city) {
+          if (trip.city && typeof trip.city === 'string') {
             const cities = trip.city.split('+').map((c: string) => c.trim()).filter(Boolean);
             const tripEndDate = trip.endDate ? new Date(trip.endDate).getTime() : 0;
-            const isCompleted = tripEndDate > 0 && tripEndDate <= now;
+            const isCompleted = tripEndDate > 0 && (tripEndDate + 86400000) <= now;
             
             cities.forEach((city: string) => {
               if (!cityStats[city]) {
@@ -344,7 +377,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
                 />
               </div>
 
-              <h2 className={`text-4xl font-black mb-1.5 ${
+              <h2 className={`text-4xl font-black mb-2 ${
                 theme === 'handdrawn' ? 'text-[#4B3F35] font-handdrawn' :
                 theme === 'hipster' ? 'text-stone-700 font-hipster tracking-tight' :
                 'text-slate-800'
@@ -352,14 +385,27 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
                 {profile?.displayName || initialName || '探索者'}
               </h2>
 
-              <p className={`text-[13px] font-bold uppercase tracking-[0.25em] mb-8 ${
-                theme === 'handdrawn' ? 'text-stone-400' : 'text-slate-400'
-              }`}>
-                Adventure Awaits
-              </p>
+              {/* Interests / Tags - MOVED BELOW NAME */}
+              {profile?.interests && profile.interests.length > 0 && (
+                <div className="w-full mb-4">
+                  <div className="flex flex-wrap justify-center gap-2 pt-0">
+                    {profile.interests.map((interest, i) => (
+                      <span 
+                        key={i} 
+                        className={`px-3 py-1.5 text-[10px] font-black rounded-xl border transition-all ${
+                          theme === 'handdrawn' ? 'bg-white border-[#4B3F35] text-[#4B3F35]' : 'bg-white border-slate-100'
+                        }`}
+                        style={theme !== 'handdrawn' ? { color: brandColor, borderColor: `rgba(${brandColorRGB}, 0.2)`, backgroundColor: `rgba(${brandColorRGB}, 0.03)` } : {}}
+                      >
+                        #{interest}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Stats Bar - NEW METRICS */}
-              <div className="w-full grid grid-cols-3 gap-0 mb-10 divide-x divide-slate-100 border-y border-slate-100 py-6">
+              <div className="w-full grid grid-cols-3 gap-0 mb-6 divide-x divide-slate-100 border-y border-slate-100 py-6">
                 <div className="flex flex-col items-center">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">旅行足跡</span>
                   <div className="flex items-center gap-1.5">
@@ -391,7 +437,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
 
               {/* Motto Box */}
               {profile?.motto && (
-                <div className={`w-full p-8 mb-10 relative ${
+                <div className={`w-full p-8 mb-6 relative ${
                   theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35] rounded-xl' :
                   theme === 'scrapbook' ? 'bg-[#FEFAF3] rounded-3xl border border-stone-200 shadow-sm' :
                   theme === 'hipster' ? 'bg-stone-50 border border-stone-100' :
@@ -408,22 +454,43 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
                 </div>
               )}
 
-              {/* Interests / Tags */}
-              <div className="w-full">
-                 <div className="flex flex-wrap justify-center gap-2 pt-2">
-                   {(profile?.interests || ["愛旅遊", "美食家", "生活美學"]).map((interest, i) => (
-                     <span 
-                      key={i} 
-                      className={`px-3 py-1.5 text-[10px] font-black rounded-xl border transition-all ${
-                        theme === 'handdrawn' ? 'bg-white border-[#4B3F35] text-[#4B3F35]' : 'bg-white border-slate-100'
-                      }`}
-                      style={theme !== 'handdrawn' ? { color: brandColor, borderColor: `rgba(${brandColorRGB}, 0.2)`, backgroundColor: `rgba(${brandColorRGB}, 0.03)` } : {}}
-                    >
-                       #{interest}
-                     </span>
-                   ))}
-                 </div>
-              </div>
+              {/* Public Trips Section */}
+              {publicTrips.length > 0 && (
+                <div className="w-full mt-10 text-left">
+                  <div className="flex items-center gap-2 mb-4 px-2">
+                    <Sparkles size={14} style={{ color: brandColor }} />
+                    <h4 className={`text-[12px] font-black uppercase tracking-widest ${theme === 'handdrawn' ? 'text-[#4B3F35]' : 'text-slate-800'}`}>
+                      公開分享的旅程
+                    </h4>
+                  </div>
+                  <div className="space-y-3">
+                    {publicTrips.map(trip => (
+                      <a 
+                        key={trip.id}
+                        href={`/trip/${trip.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`block p-4 transition-all active:scale-[0.98] ${
+                          theme === 'handdrawn' ? 'bg-white border border-[#4B3F35] rounded-xl hover:shadow-sm' :
+                          'bg-slate-50 border border-slate-100 rounded-2xl hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="flex-1 min-w-0">
+                            <h5 className={`text-sm font-black truncate ${theme === 'handdrawn' ? 'text-[#4B3F35]' : 'text-slate-800'}`}>
+                              {trip.name}
+                            </h5>
+                            <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">
+                              {trip.city} • {trip.startDate ? new Date(trip.startDate).toLocaleDateString() : '待定'}
+                            </p>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-300 shrink-0" />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>            
             {/* Footer decoration */}
             <div className={`h-2 w-full mt-auto ${theme === 'handdrawn' ? 'bg-[#4B3F35]' : ''}`}

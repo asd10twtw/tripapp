@@ -13,9 +13,10 @@ interface ExpenseViewProps {
   tripId: string;
   currentUser: UserProfile;
   theme?: string;
+  isReadOnly?: boolean;
 }
 
-export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, currentUser, theme }) => {
+export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, currentUser, theme, isReadOnly }) => {
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'settle'>('list');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   
@@ -440,15 +441,17 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-24 h-6 washi-tape-grid bg-amber-100/40 border-x border-amber-200/10 rotate-[-1deg] z-0" />
                )}
                <h3 className={`text-xs font-black uppercase tracking-widest relative z-10 ${theme === 'scrapbook' ? 'text-stone-300' : 'text-slate-300'}`}>TIMELINE</h3>
-               <button 
-                 onClick={openAddModal} 
-                 className={`flex items-center justify-center shadow-active active:scale-90 transition-transform relative z-10 ${
-                   theme === 'handdrawn' || theme === 'scrapbook' ? 'w-10 h-10 rounded-xl' : 'p-2.5 rounded-xl text-white'
-                 }`} 
-                 style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}
-                >
-                 <Plus size={theme === 'handdrawn' || theme === 'scrapbook' ? 24 : 18} strokeWidth={3}/>
-               </button>
+               {!isReadOnly && (
+                 <button 
+                  onClick={openAddModal} 
+                  className={`flex items-center justify-center shadow-active active:scale-90 transition-transform relative z-10 ${
+                    theme === 'handdrawn' || theme === 'scrapbook' ? 'w-10 h-10 rounded-xl' : 'p-2.5 rounded-xl text-white'
+                  }`} 
+                  style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}
+                  >
+                  <Plus size={theme === 'handdrawn' || theme === 'scrapbook' ? 24 : 18} strokeWidth={3}/>
+                </button>
+               )}
             </div>
             {sortedDates.map(date => (
                 <div key={date} className="space-y-3">
@@ -537,7 +540,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                   <div className="flex items-center gap-2">
                     <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-16 text-right">1 KRW ≈</div>
                     <div className="flex-1 min-w-0 bg-white border border-sky-400/20 rounded-xl px-2 h-10 flex items-center shadow-sm">
-                        <input type="number" step="0.0001" value={localRateStr} onChange={(e) => handleRateChange(e.target.value)} className="w-full text-center text-sm font-black bg-transparent outline-none" style={{ color: 'var(--brand-color)' }} />
+                        <input type="number" step="0.0001" value={localRateStr} onChange={(e) => !isReadOnly && handleRateChange(e.target.value)} disabled={isReadOnly} className="w-full text-center text-sm font-black bg-transparent outline-none disabled:opacity-50" style={{ color: 'var(--brand-color)' }} />
                     </div>
                     <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-8">TWD</div>
                   </div>
@@ -545,7 +548,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                   <div className="flex items-center gap-2">
                     <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-16 text-right">1 JPY ≈</div>
                     <div className="flex-1 min-w-0 bg-white border border-sky-400/20 rounded-xl px-2 h-10 flex items-center shadow-sm">
-                        <input type="number" step="0.0001" value={jpyRateStr} onChange={(e) => handleJpyRateChange(e.target.value)} className="w-full text-center text-sm font-black bg-transparent outline-none" style={{ color: 'var(--brand-color)' }} />
+                        <input type="number" step="0.0001" value={jpyRateStr} onChange={(e) => !isReadOnly && handleJpyRateChange(e.target.value)} disabled={isReadOnly} className="w-full text-center text-sm font-black bg-transparent outline-none disabled:opacity-50" style={{ color: 'var(--brand-color)' }} />
                     </div>
                     <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-8">TWD</div>
                   </div>

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Trip, UserProfile } from '../types';
 import { Plus, Calendar, MapPin, LogOut, Settings, User as UserIcon, Trash2, Wallet, Star, Award, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints } from 'lucide-react';
 import { db, logout } from '../services/firebase';
-import { collection, query, where, onSnapshot, addDoc, orderBy, getDocs, limit, deleteDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, orderBy, getDocs, limit, deleteDoc, doc, setDoc, serverTimestamp, updateDoc, getDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface DashboardProps {
@@ -17,7 +17,8 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip, isCreateModalOpen, setIsCreateModalOpen, onJoinTrip }) => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [tripToDelete, setTripToDelete] = useState<{id: string, name: string} | null>(null);
+  const [deleteMode, setDeleteMode] = useState<'delete' | 'exit'>('delete');
+  const [tripToDelete, setTripToDelete] = useState<{id: string, name: string, ownerUid: string} | null>(null);
   const [newTripName, setNewTripName] = useState('');
   const [newTripCity, setNewTripCity] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -74,20 +75,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
     }
   };
 
-  const handleDeleteTrip = (e: React.MouseEvent, tripId: string, tripName: string) => {
+  const handleDeleteTrip = (e: React.MouseEvent, trip: Trip) => {
     e.stopPropagation();
-    setTripToDelete({ id: tripId, name: tripName });
+    const isOwner = trip.ownerUid === user.uid;
+    setTripToDelete({ id: trip.id, name: trip.name, ownerUid: trip.ownerUid });
+    setDeleteMode(isOwner ? 'delete' : 'exit');
     setIsDeleteConfirmOpen(true);
   };
 
   const confirmDeleteTrip = async () => {
     if (!tripToDelete) return;
     try {
-      await deleteDoc(doc(db, 'trips', tripToDelete.id));
+      if (deleteMode === 'delete') {
+        await deleteDoc(doc(db, 'trips', tripToDelete.id));
+      } else {
+        // Exit Trip: Remove UID from memberUids array
+        const tripRef = doc(db, 'trips', tripToDelete.id);
+        const tripSnap = await getDoc(tripRef);
+        if (tripSnap.exists()) {
+          const data = tripSnap.data() as Trip;
+          const updatedMembers = data.memberUids.filter(id => id !== user.uid);
+          await updateDoc(tripRef, { memberUids: updatedMembers });
+          // Also remove the member document
+          await deleteDoc(doc(db, 'trips', tripToDelete.id, 'members', user.uid));
+        }
+      }
       setIsDeleteConfirmOpen(false);
       setTripToDelete(null);
     } catch (err) {
-      console.error("Failed to delete trip:", err);
+      console.error("Failed to perform trip action:", err);
     }
   };
 
@@ -198,10 +214,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
 
               {/* Delete button in circle at bottom right */}
               <button 
-                onClick={(e) => handleDeleteTrip(e, trip.id, trip.name)}
+                onClick={(e) => handleDeleteTrip(e, trip)}
                 className="absolute bottom-4 right-4 p-2.5 bg-black/40 backdrop-blur-md rounded-full text-white/90 hover:bg-rose-500 hover:text-white transition-all scale-90"
               >
-                <Trash2 size={16} strokeWidth={2.5} />
+                {trip.ownerUid === user.uid ? (
+                  <Trash2 size={16} strokeWidth={2.5} />
+                ) : (
+                  <LogOut size={16} strokeWidth={2.5} />
+                )}
               </button>
             </div>
 
@@ -242,10 +262,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
             <div className="flex items-center justify-between gap-2">
               <h3 className={`text-stone-700 font-hipster leading-tight truncate ${isCompact ? 'text-xs' : 'text-base'}`}>{trip.name}</h3>
               <button 
-                onClick={(e) => handleDeleteTrip(e, trip.id, trip.name)}
+                onClick={(e) => handleDeleteTrip(e, trip)}
                 className="p-1 text-stone-300 hover:text-rose-400 transition-colors"
               >
-                <Trash2 size={12} />
+                {trip.ownerUid === user.uid ? <Trash2 size={12} /> : <LogOut size={12} />}
               </button>
             </div>
             <div className="flex items-center gap-2 text-[9px] font-hipster text-stone-400">
@@ -278,10 +298,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
               </div>
             </div>
             <button 
-              onClick={(e) => handleDeleteTrip(e, trip.id, trip.name)}
+              onClick={(e) => handleDeleteTrip(e, trip)}
               className="p-2 bg-black/20 backdrop-blur-md rounded-full text-white/70 hover:text-white transition-all ml-2"
             >
-              <Trash2 size={14} />
+              {trip.ownerUid === user.uid ? <Trash2 size={14} /> : <LogOut size={14} />}
             </button>
           </div>
         </div>
@@ -643,11 +663,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
               className="relative w-full max-w-xs bg-white rounded-[32px] p-8 shadow-2xl text-center"
             >
               <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500">
-                <Trash2 size={32} />
+                {deleteMode === 'delete' ? <Trash2 size={32} /> : <LogOut size={32} />}
               </div>
-              <h3 className="text-lg font-black text-slate-800 mb-2">確定要刪除嗎？</h3>
+              <h3 className="text-lg font-black text-slate-800 mb-2">
+                {deleteMode === 'delete' ? '確定要刪除嗎？' : '確定要退出嗎？'}
+              </h3>
               <p className="text-slate-400 text-xs font-bold mb-8 leading-relaxed">
-                確定要刪除「{tripToDelete?.name}」嗎？<br/>此動作無法復原。
+                {deleteMode === 'delete' 
+                  ? `確定要刪除「${tripToDelete?.name}」嗎？此動作將會「永久刪除」旅程內的所有行程、記帳與照片，所有成員都將失去存取權，且無法復原。`
+                  : `確定要退出「${tripToDelete?.name}」嗎？退出後您將無法再查看或編輯此旅程。若您只是不小心加入，退出後該旅程將不會出現在您的首頁。`
+                }
               </p>
               <div className="flex gap-3">
                 <button 
@@ -660,7 +685,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
                   onClick={confirmDeleteTrip}
                   className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-200 active:scale-95 transition-all"
                 >
-                  確定刪除
+                  {deleteMode === 'delete' ? '確定刪除' : '確定退出'}
                 </button>
               </div>
             </motion.div>

@@ -13,9 +13,10 @@ interface PlanningViewProps {
   tripId: string;
   currentUser: User;
   theme?: string;
+  isReadOnly?: boolean;
 }
 
-export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, currentUser, theme }) => {
+export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, currentUser, theme, isReadOnly }) => {
   const activeTab = 'shopping';
   const [activeMemberId, setActiveMemberId] = useState<string>('');
   const [todos, setTodos] = useState<TodoItem[]>([]);
@@ -312,13 +313,15 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
             </h2>
           )}
         </div>
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"
-          style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.3)' }}
-        >
-          <Plus size={24} strokeWidth={3} />
-        </button>
+        {!isReadOnly && (
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"
+            style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.3)' }}
+          >
+            <Plus size={24} strokeWidth={3} />
+          </button>
+        )}
       </div>
 
       <div className="mb-4 shrink-0">
@@ -359,15 +362,15 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
             >
               <div className="flex items-start gap-3">
                 <div 
-                  onClick={() => toggleTodo(item.id, item.completed)}
-                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all cursor-pointer ${item.completed ? 'border-transparent' : 'border-slate-200 bg-white'}`}
+                  onClick={() => !isReadOnly && toggleTodo(item.id, item.completed)}
+                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${item.completed ? 'border-transparent' : 'border-slate-200 bg-white'} ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}
                   style={{ backgroundColor: item.completed ? 'var(--brand-color)' : undefined }}
                 >
                   {item.completed && <Check size={14} style={{ color: 'var(--brand-text)' }} strokeWidth={4} />}
                 </div>
                 
-                <div className="flex-1 min-w-0" onClick={() => toggleTodo(item.id, item.completed)}>
-                  <h4 className={`text-sm font-black break-all ${item.completed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                <div className="flex-1 min-w-0" onClick={() => !isReadOnly && toggleTodo(item.id, item.completed)}>
+                  <h4 className={`text-sm font-black break-all ${item.completed ? 'text-slate-400 line-through' : 'text-slate-800'} ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}`}>
                     {item.text}
                   </h4>
                   {item.location && (
@@ -379,8 +382,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ members, tripId, cur
                 </div>
 
                 <button 
-                  onClick={(e) => { e.stopPropagation(); setItemToDelete(item.id); }} 
-                  className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-200'} p-1 hover:text-rose-400 transition-colors shrink-0`}
+                  onClick={(e) => { e.stopPropagation(); !isReadOnly && setItemToDelete(item.id); }} 
+                  className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-200'} p-1 hover:text-rose-400 transition-colors shrink-0 ${isReadOnly ? 'hidden' : ''}`}
                 >
                   <Trash2 size={16} />
                 </button>

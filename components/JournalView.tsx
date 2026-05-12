@@ -12,9 +12,10 @@ interface JournalViewProps {
   tripId: string;
   currentUser: any;
   theme?: string;
+  isReadOnly?: boolean;
 }
 
-export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, currentUser, theme }) => {
+export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, currentUser, theme, isReadOnly }) => {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [inputContent, setInputContent] = useState('');
   const [inputImage, setInputImage] = useState<string | null>(null);
@@ -350,7 +351,7 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, curre
           </div>
         </div>
 
-        <div className={`flex flex-col p-6 mb-8 shrink-0 ${
+        <div className={`flex flex-col p-6 mb-8 shrink-0 ${isReadOnly ? 'hidden' : ''} ${
           theme === 'handdrawn' || theme === 'scrapbook' ? 'bg-white border-2 border-[#4B3F35]/15 rounded-xl shadow-[4px_4px_0_0_rgba(75,63,53,0.05)]' : 
           'bg-white rounded-[32px] shadow-soft border border-slate-50'
         }`}>
@@ -445,8 +446,12 @@ export const JournalView: React.FC<JournalViewProps> = ({ members, tripId, curre
                     <span className="text-[9px] font-black text-slate-300 uppercase tracking-tighter">{dateStr}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => startEdit(entry)} className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-200'} p-1.5 transition-colors`} style={{ color: editingId === entry.id ? 'var(--brand-color)' : undefined }}><Pencil size={14} /></button>
-                    <button onClick={(e) => { e.stopPropagation(); setItemToDelete(entry.id); }} className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-200'} p-1.5 hover:text-rose-400 transition-colors`}><X size={16} /></button>
+                    {!isReadOnly && (
+                      <>
+                        <button onClick={() => startEdit(entry)} className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-200'} p-1.5 transition-colors`} style={{ color: editingId === entry.id ? 'var(--brand-color)' : undefined }}><Pencil size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setItemToDelete(entry.id); }} className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-200'} p-1.5 hover:text-rose-400 transition-colors`}><X size={16} /></button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <p className="text-xs font-bold text-slate-600 leading-relaxed whitespace-pre-wrap pl-1 mb-3">

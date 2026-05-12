@@ -11,6 +11,7 @@ export interface Trip {
   city?: string;
   country?: string;
   inviteCode?: string;
+  isPublic?: boolean;
 }
 
 export interface UserProfile {
@@ -67,7 +68,9 @@ export interface ScheduleEvent {
   category: EventCategory;
   notes?: string;
   mapLink?: string;
+  coordinates?: { lat: number; lng: number };
   createdAt?: string;
+  sortOrder?: number;
 }
 
 export interface PreTripTask {

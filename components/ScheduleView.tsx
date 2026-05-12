@@ -1,11 +1,13 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ScheduleEvent, EventCategory, PreTripTask, Member } from '../types';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../constants';
-import { MapPin, Info, Plus, X, Check, Trash2, Plane, ChevronDown, Clock, Settings } from 'lucide-react';
+import { MapPin, Info, Plus, X, Check, Trash2, Plane, ChevronDown, Clock, Settings, Map as MapIcon, Loader2, Search } from 'lucide-react';
 import { db } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, deleteDoc, updateDoc, doc, arrayUnion, arrayRemove, orderBy, getDoc, setDoc } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Reorder } from 'motion/react';
+import { TripMapView } from './TripMapView';
+import { LocationPicker } from './LocationPicker';
 
 interface ScheduleViewProps {
   members: Member[];
@@ -13,9 +15,10 @@ interface ScheduleViewProps {
   startDate: string;
   endDate: string;
   theme?: string;
+  isReadOnly?: boolean;
 }
 
-export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, startDate, endDate, theme }) => {
+export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, startDate, endDate, theme, isReadOnly }) => {
   const generateDates = () => {
     const start = new Date(startDate + 'T00:00:00');
     const end = new Date(endDate + 'T00:00:00');
@@ -60,6 +63,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
   const [newCatEmoji, setNewCatEmoji] = useState('📍');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -71,12 +75,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
 
   // 航班資訊相關狀態
   const [flightInfo, setFlightInfo] = useState<{
-    departure?: { from: string, to: string, time: string, arrivalTime?: string, flightNo: string },
-    return?: { from: string, to: string, time: string, arrivalTime?: string, flightNo: string }
+    departure?: { from: string, to: string, time: string, arrivalTime?: string, flightNo: string, baggageWeight?: string },
+    return?: { from: string, to: string, time: string, arrivalTime?: string, flightNo: string, baggageWeight?: string }
   }>({});
   const [isFlightModalOpen, setIsFlightModalOpen] = useState(false);
   const [editingFlightType, setEditingFlightType] = useState<'departure' | 'return' | null>(null);
-  const [editFlightData, setEditFlightData] = useState({ from: '', to: '', time: '', arrivalTime: '', flightNo: '' });
+  const [editFlightData, setEditFlightData] = useState({ from: '', to: '', time: '', arrivalTime: '', flightNo: '', baggageWeight: '' });
+  const [isMapViewOpen, setIsMapViewOpen] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [isFetchingCoords, setIsFetchingCoords] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [newCoordinates, setNewCoordinates] = useState<{ lat: number; lng: number } | undefined>(undefined);
 
   // Swipe gesture state
   const [touchStart, setTouchStart] = useState<{x: number, y: number} | null>(null);
@@ -155,35 +164,50 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
   }, [tripId]);
 
   const handleSaveFlightInfo = async () => {
-    if (!editingFlightType) return;
-    const updated = { ...flightInfo, [editingFlightType]: editFlightData };
-    setFlightInfo(updated);
-    await setDoc(doc(db, 'trips', tripId, 'config', 'flightInfo'), updated);
-    setIsFlightModalOpen(false);
+    if (!editingFlightType || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const updated = { ...flightInfo, [editingFlightType]: editFlightData };
+      setFlightInfo(updated);
+      await setDoc(doc(db, 'trips', tripId, 'config', 'flightInfo'), updated);
+      setIsFlightModalOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const openFlightEdit = (type: 'departure' | 'return') => {
     setEditingFlightType(type);
-    const data = flightInfo[type] || { from: '', to: '', time: '', arrivalTime: '', flightNo: '' };
+    const data = flightInfo[type] || { from: '', to: '', time: '', arrivalTime: '', flightNo: '', baggageWeight: '' };
     setEditFlightData({ 
       from: data.from || '', 
       to: data.to || '', 
       time: data.time || '', 
       arrivalTime: data.arrivalTime || '', 
-      flightNo: data.flightNo || '' 
+      flightNo: data.flightNo || '',
+      baggageWeight: data.baggageWeight || ''
     });
     setIsFlightModalOpen(true);
   };
 
   const handleAddNewCategory = async (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!newCatName.trim()) return;
-    const updated = { ...customCategories, [newCatName.trim()]: newCatEmoji };
-    setCustomCategories(updated);
-    setIsAddingCategory(false);
-    await setDoc(doc(db, 'trips', tripId, 'config', 'scheduleSettings'), { customCategories: updated }, { merge: true });
-    setNewCategory(newCatName.trim());
-    setNewCatName('');
+    if (!newCatName.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const updated = { ...customCategories, [newCatName.trim()]: newCatEmoji };
+      setCustomCategories(updated);
+      setIsAddingCategory(false);
+      await setDoc(doc(db, 'trips', tripId, 'config', 'scheduleSettings'), { customCategories: updated }, { merge: true });
+      setNewCategory(newCatName.trim());
+      setNewCatName('');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -219,13 +243,20 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
 
   const handleAddPreTripTask = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!newTaskTitle.trim()) return;
-      await addDoc(collection(db, 'trips', tripId, 'pretrip_tasks'), { 
-        title: newTaskTitle, 
-        completedBy: [], 
-        createdAt: new Date().toISOString() 
-      });
-      setNewTaskTitle('');
+      if (!newTaskTitle.trim() || isSubmitting) return;
+      setIsSubmitting(true);
+      try {
+        await addDoc(collection(db, 'trips', tripId, 'pretrip_tasks'), { 
+          title: newTaskTitle, 
+          completedBy: [], 
+          createdAt: new Date().toISOString() 
+        });
+        setNewTaskTitle('');
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSubmitting(false);
+      }
   };
 
   const deletePreTripTask = async (id: string) => { 
@@ -239,30 +270,71 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLocation) return;
+    if (!newLocation || isSubmitting) return;
+    setIsSubmitting(true);
     try {
+      const eventData = { 
+        location: newLocation, 
+        category: newCategory, 
+        notes: newNotes,
+        time: newTime,
+        coordinates: newCoordinates || null
+      };
+
       if (editingId) {
-        await updateDoc(doc(db, 'trips', tripId, 'events', editingId), { 
-          location: newLocation, 
-          category: newCategory, 
-          notes: newNotes,
-          time: newTime
-        });
+        await updateDoc(doc(db, 'trips', tripId, 'events', editingId), eventData);
       } else {
+        const nextOrder = filteredEvents.length;
         await addDoc(collection(db, 'trips', tripId, 'events'), { 
+          ...eventData,
           date: selectedDate, 
-          time: newTime,
           title: '', 
-          location: newLocation, 
-          category: newCategory, 
-          notes: newNotes, 
-          createdAt: new Date().toISOString() 
+          createdAt: new Date().toISOString(),
+          sortOrder: nextOrder
         });
       }
       setIsModalOpen(false);
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e); 
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
+  const fetchCoords = async () => {
+    if (!newLocation.trim()) {
+      setFetchError("請先輸入目的地名稱");
+      return;
+    }
+    const apiKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyBhZtrsN7V57zWxZ6aKzvoYrtU4hh5MV1M';
+    
+    setIsFetchingCoords(true);
+    setFetchError(null);
+    try {
+      const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(newLocation)}&key=${apiKey}`);
+      const data = await response.json();
+      
+      if (data.status === 'OK' && data.results[0]) {
+        const { lat, lng } = data.results[0].geometry.location;
+        setNewCoordinates({ lat, lng });
+      } else if (data.status === 'ZERO_RESULTS') {
+        setFetchError(`找不到「${newLocation}」。建議輸入更具體的地址或景點名稱。`);
+        setNewCoordinates(undefined);
+      } else if (data.status === 'OVER_QUERY_LIMIT') {
+        setFetchError("系統搜尋量已達上限，請稍後再試。");
+      } else {
+        setFetchError(`搜尋失敗 (代碼: ${data.status})，請確認地址後重試。`);
+        setNewCoordinates(undefined);
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setFetchError("網路連線錯誤，無法獲取座標資訊。");
+      setNewCoordinates(undefined);
+    } finally {
+      setIsFetchingCoords(false);
+    }
+  };
+
   const handleDeleteEvent = async (id?: string) => {
     const targetId = id || editingId;
     if (!targetId) return;
@@ -271,7 +343,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
   }
 
   const confirmDelete = async () => {
-    if (!deleteTargetId) return;
+    if (!deleteTargetId || isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await deleteDoc(doc(db, 'trips', tripId, 'events', deleteTargetId)); 
       setIsModalOpen(false); 
@@ -279,6 +352,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
       setDeleteTargetId(null);
     } catch (err) {
       console.error("Delete failed:", err);
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -288,6 +363,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
     setNewCategory(event.category);
     setNewNotes(event.notes || '');
     setNewTime(event.time || '');
+    setNewCoordinates(event.coordinates);
+    setFetchError(null);
     setIsModalOpen(true);
   };
 
@@ -296,6 +373,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
     setNewLocation('');
     setNewNotes('');
     setNewTime('');
+    setNewCoordinates(undefined);
+    setFetchError(null);
     setIsModalOpen(true);
   };
 
@@ -305,14 +384,36 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
   const getCategoryIcon = (cat: string) => (allCategoryIcons as any)[cat] || '📍';
   const getCategoryColorClass = (cat: string) => (allCategoryColors as any)[cat] || 'bg-slate-50 text-slate-400 border-slate-100';
 
-  const filteredEvents = events
-    .filter(e => e.date === selectedDate)
-    .sort((a, b) => {
-      if (a.time && b.time) return a.time.localeCompare(b.time);
-      if (a.time) return -1;
-      if (b.time) return 1;
-      return (a.createdAt || '').localeCompare(b.createdAt || '');
-    });
+  const filteredEvents = useMemo(() => {
+    return events
+      .filter(e => e.date === selectedDate)
+      .sort((a, b) => {
+        const orderA = a.sortOrder ?? 999;
+        const orderB = b.sortOrder ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        if (a.time && b.time) return a.time.localeCompare(b.time);
+        if (a.time) return -1;
+        if (b.time) return 1;
+        return (a.createdAt || '').localeCompare(b.createdAt || '');
+      });
+  }, [events, selectedDate]);
+
+  const handleReorder = async (newOrder: ScheduleEvent[]) => {
+    // 優化使用者體驗：先更新本地預覽狀態
+    const otherEvents = events.filter(e => e.date !== selectedDate);
+    const updatedSortedEvents = newOrder.map((e, index) => ({ ...e, sortOrder: index }));
+    setEvents([...otherEvents, ...updatedSortedEvents]);
+
+    // 同步到資料庫
+    try {
+      const promises = newOrder.map((item, index) => 
+        updateDoc(doc(db, 'trips', tripId, 'events', item.id), { sortOrder: index })
+      );
+      await Promise.all(promises);
+    } catch (err) {
+      console.error("Reorder sync failed:", err);
+    }
+  };
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -362,7 +463,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
              <div className="space-y-3 pt-2">
                  <div className="bg-white p-5 rounded-3xl shadow-soft border border-slate-50">
                      <h3 className="text-base font-bold text-slate-800 mb-4">行前準備</h3>
-                     <form onSubmit={handleAddPreTripTask} className="relative mb-4">
+                      <form onSubmit={handleAddPreTripTask} className={`relative mb-4 ${isReadOnly ? 'hidden' : ''}`}>
                         <input 
                            type="text" 
                            placeholder="準備事項..." 
@@ -379,7 +480,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                             <div key={task.id} className="bg-white rounded-xl border border-slate-100 p-3 shadow-xs">
                                 <div className="flex justify-between items-center mb-3">
                                     <span className="font-bold text-slate-700 text-xs">{task.title}</span>
-                                    <button onClick={() => deletePreTripTask(task.id)} className="text-slate-200 p-1 hover:text-rose-400 transition-colors">
+                                    <button onClick={() => !isReadOnly && deletePreTripTask(task.id)} className={`text-slate-200 p-1 hover:text-rose-400 transition-colors ${isReadOnly ? 'hidden' : ''}`}>
                                       <Trash2 size={14} />
                                     </button>
                                 </div>
@@ -389,8 +490,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                                         return (
                                             <button 
                                                 key={member.id}
-                                                onClick={() => toggleTaskCompletion(task.id, member.id, isDone)}
-                                                className="flex flex-col items-center shrink-0 gap-1 w-12"
+                                                onClick={() => !isReadOnly && toggleTaskCompletion(task.id, member.id, isDone)}
+                                                className={`flex flex-col items-center shrink-0 gap-1 w-12 ${isReadOnly ? 'cursor-default' : ''}`}
                                             >
                                                 <div className="w-10 h-10 rounded-full border-2 overflow-hidden relative transition-all" style={{ borderColor: isDone ? 'var(--brand-color)' : undefined, boxShadow: isDone ? '0 0 0 2px rgba(var(--brand-color-rgb), 0.1)' : undefined }}>
                                                     <img src={member.avatar} className="w-full h-full object-cover" alt={member.name} referrerPolicy="no-referrer" />
@@ -414,13 +515,18 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
         <>
             {selectedDate === startDate && (
               <div 
-                onClick={() => openFlightEdit('departure')}
-                className={`${theme === 'handdrawn' ? 'rounded-xl' : 'rounded-[24px]'} bg-white border-2 border-dashed border-sky-400/20 p-4 shadow-soft relative overflow-hidden mt-1 mb-4 cursor-pointer hover:border-sky-400/40 transition-colors group`}
+                onClick={() => !isReadOnly && openFlightEdit('departure')}
+                className={`${theme === 'handdrawn' ? 'rounded-xl' : 'rounded-[24px]'} bg-white border-2 border-dashed border-sky-400/20 p-4 shadow-soft relative overflow-hidden mt-1 mb-4 ${isReadOnly ? 'cursor-default' : 'cursor-pointer hover:border-sky-400/40'} transition-colors group`}
               >
                 <div className="flex justify-between items-center mb-4">
                   <div className="border text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-tighter" style={{ backgroundColor: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.3)', color: 'var(--brand-text)' }}>出發航班</div>
-                  <div className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1" style={{ color: 'var(--brand-color)' }}>
-                    {flightInfo.departure?.from || 'TPE'} → {flightInfo.departure?.to || 'ICN'}
+                  <div className="text-[10px] font-black uppercase flex items-center gap-1.5" style={{ color: 'var(--brand-color)' }}>
+                    {flightInfo.departure?.baggageWeight && (
+                      <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 rounded-lg text-[9px] font-black text-slate-400">
+                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="13" x="4" y="7" rx="2"/><path d="M9 7V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3"/></svg>
+                         {flightInfo.departure.baggageWeight}kg
+                      </div>
+                    )}
                     <Settings size={10} className="opacity-0 group-hover:opacity-50" />
                   </div>
                 </div>
@@ -435,7 +541,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                        <div className="w-1.5 h-1.5 rounded-full -ml-0.5" style={{ backgroundColor: 'var(--brand-color)' }}></div>
                        <div className="w-1.5 h-1.5 rounded-full -mr-0.5" style={{ backgroundColor: 'var(--brand-color)' }}></div>
                     </div>
-                    <span className="text-[8px] text-slate-300 mt-1 font-bold tracking-wider uppercase">{flightInfo.departure?.flightNo || '---'}</span>
+                    <div className="flex gap-2 items-center mt-1">
+                      <span className="text-[8px] text-slate-300 font-bold tracking-wider uppercase">{flightInfo.departure?.flightNo || '---'}</span>
+                    </div>
                   </div>
                   <div className="text-center">
                     <h4 className="text-2xl font-bold text-slate-700">{flightInfo.departure?.to || 'ICN'}</h4>
@@ -447,13 +555,18 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
 
             {selectedDate === endDate && (
               <div 
-                onClick={() => openFlightEdit('return')}
-                className={`${theme === 'handdrawn' ? 'rounded-xl' : 'rounded-[24px]'} bg-white border-2 border-dashed border-rose-400/20 p-4 shadow-soft relative overflow-hidden mt-1 mb-4 cursor-pointer hover:border-rose-400/40 transition-colors group`}
+                onClick={() => !isReadOnly && openFlightEdit('return')}
+                className={`${theme === 'handdrawn' ? 'rounded-xl' : 'rounded-[24px]'} bg-white border-2 border-dashed border-rose-400/20 p-4 shadow-soft relative overflow-hidden mt-1 mb-4 ${isReadOnly ? 'cursor-default' : 'cursor-pointer hover:border-rose-400/40'} transition-colors group`}
               >
                 <div className="flex justify-between items-center mb-4">
                   <div className="border text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-tighter" style={{ backgroundColor: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.3)', color: 'var(--brand-text)' }}>回程航班</div>
-                  <div className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1" style={{ color: 'var(--brand-color)' }}>
-                    {flightInfo.return?.from || 'ICN'} → {flightInfo.return?.to || 'TPE'}
+                  <div className="text-[10px] font-black uppercase flex items-center gap-1.5" style={{ color: 'var(--brand-color)' }}>
+                    {flightInfo.return?.baggageWeight && (
+                      <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 rounded-lg text-[9px] font-black text-slate-400">
+                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="13" x="4" y="7" rx="2"/><path d="M9 7V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3"/></svg>
+                         {flightInfo.return.baggageWeight}kg
+                      </div>
+                    )}
                     <Settings size={10} className="opacity-0 group-hover:opacity-50" />
                   </div>
                 </div>
@@ -468,7 +581,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                        <div className="w-1.5 h-1.5 rounded-full -ml-0.5" style={{ backgroundColor: 'var(--brand-color)' }}></div>
                        <div className="w-1.5 h-1.5 rounded-full -mr-0.5" style={{ backgroundColor: 'var(--brand-color)' }}></div>
                     </div>
-                    <span className="text-[8px] text-slate-300 mt-1 font-bold tracking-wider uppercase">{flightInfo.return?.flightNo || '---'}</span>
+                    <div className="flex gap-2 items-center mt-1">
+                      <span className="text-[8px] text-slate-300 font-bold tracking-wider uppercase">{flightInfo.return?.flightNo || '---'}</span>
+                    </div>
                   </div>
                   <div className="text-center">
                     <h4 className="text-2xl font-bold text-slate-700">{flightInfo.return?.to || 'TPE'}</h4>
@@ -478,42 +593,61 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
               </div>
             )}
 
-            <button 
-                onClick={openAddModal}
-                className={`w-full font-black py-4 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all mb-4 relative overflow-hidden ${
-                  theme === 'scrapbook' ? 'rounded-xl bg-[#8B5E3C] text-white shadow-active' : 
-                  theme === 'handdrawn' ? 'rounded-xl bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.15)] text-[#4B3F35]' :
-                  'rounded-2xl shadow-active'
-                }`}
-                style={(!['scrapbook', 'handdrawn'].includes(theme || '')) ? { backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' } : {}}
-            >
-              {/* 強制顯示的邊框層 */}
-              <div 
-                className="absolute inset-0 rounded-[inherit] border-2 border-solid pointer-events-none" 
-                style={{ 
-                  borderColor: theme === 'handdrawn' ? 'rgba(75, 63, 53, 0.25)' : 
-                               (theme === 'scrapbook' ? '#8B5E3C' : 'rgba(var(--brand-color-rgb), 0.2)') 
-                }} 
-              />
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-sm relative z-10 ${
-                theme === 'scrapbook' ? 'bg-white/20' : 
-                theme === 'handdrawn' ? 'bg-[#4B3F35] text-white' :
-                'bg-white/20'
-              }`}>
-                <Plus size={14} strokeWidth={4} style={{ color: theme === 'handdrawn' ? 'white' : (theme === 'scrapbook' ? 'white' : 'var(--brand-text)') }} />
-              </div>
-              <span className="text-sm tracking-tight uppercase">新增行程</span>
-            </button>
+            <div className="flex gap-2 mb-4">
+              {!isReadOnly && (
+                <button 
+                    onClick={openAddModal}
+                    className={`flex-1 font-black py-4 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all relative overflow-hidden ${
+                      theme === 'scrapbook' ? 'rounded-xl bg-[#8B5E3C] text-white shadow-active' : 
+                      theme === 'handdrawn' ? 'rounded-xl bg-white shadow-[4px_4px_0_0_rgba(75,63,53,0.15)] text-[#4B3F35]' :
+                      'rounded-2xl shadow-active'
+                    }`}
+                    style={(!['scrapbook', 'handdrawn'].includes(theme || '')) ? { backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' } : {}}
+                >
+                  {/* 強制顯示的邊框層 */}
+                  <div 
+                    className="absolute inset-0 rounded-[inherit] border-2 border-solid pointer-events-none" 
+                    style={{ 
+                      borderColor: theme === 'handdrawn' ? 'rgba(75, 63, 53, 0.25)' : 
+                                  (theme === 'scrapbook' ? '#8B5E3C' : 'rgba(var(--brand-color-rgb), 0.2)') 
+                    }} 
+                  />
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-sm relative z-10 ${
+                    theme === 'scrapbook' ? 'bg-white/20' : 
+                    theme === 'handdrawn' ? 'bg-[#4B3F35] text-white' :
+                    'bg-white/20'
+                  }`}>
+                    <Plus size={14} strokeWidth={4} style={{ color: theme === 'handdrawn' ? 'white' : (theme === 'scrapbook' ? 'white' : 'white') }} />
+                  </div>
+                  <span className="text-sm tracking-tight uppercase">新增行程</span>
+                </button>
+              )}
 
-            <div className={`space-y-4 ${theme === 'scrapbook' || theme === 'hipster' ? 'relative pl-8' : ''}`}>
-            {(theme === 'scrapbook' || theme === 'hipster') && filteredEvents.length > 0 && (
-              <div className={`absolute left-3 top-2 bottom-2 w-px dashed-line ${theme === 'hipster' ? 'bg-stone-300' : 'bg-stone-200'}`} />
-            )}
+              <button 
+                  onClick={() => setIsMapViewOpen(true)}
+                  className={`${isReadOnly ? 'flex-1' : 'w-14'} font-black flex items-center justify-center active:scale-[0.98] transition-all relative overflow-hidden border-2 ${
+                    theme === 'handdrawn' ? 'rounded-xl bg-white border-[#4B3F35]/20 text-[#4B3F35]' : 
+                    theme === 'scrapbook' ? 'rounded-xl bg-white border-stone-200 text-stone-600 shadow-sm' :
+                    'rounded-2xl bg-white border-slate-100 text-slate-400 shadow-sm'
+                  } ${isReadOnly ? 'py-4 gap-2 text-sm' : ''}`}
+              >
+                <MapIcon size={20} />
+                {isReadOnly && <span className="tracking-tight uppercase">查看行程導覽圖</span>}
+              </button>
+            </div>
+
+            <div className={`relative ${theme === 'scrapbook' || theme === 'hipster' ? 'pl-8' : ''}`}>
+              {(theme === 'scrapbook' || theme === 'hipster') && filteredEvents.length > 0 && (
+                <div className={`absolute left-3 top-2 bottom-2 w-px dashed-line z-0 ${theme === 'hipster' ? 'bg-stone-300' : 'bg-stone-200'}`} />
+              )}
+              <Reorder.Group axis="y" values={filteredEvents} onReorder={handleReorder} className={`space-y-4 relative z-10 ${isReadOnly ? 'pointer-events-none' : ''}`}>
             {filteredEvents.map((event, idx) => (
-                <div 
+                <Reorder.Item 
                     key={event.id}
-                    onClick={() => openEditModal(event)}
-                    className={`p-5 active:scale-[0.98] transition-all relative group ${
+                    value={event}
+                    onClick={() => !isReadOnly && openEditModal(event)}
+                    drag={!isReadOnly}
+                    className={`p-5 active:scale-[0.98] transition-all relative group ${isReadOnly ? 'cursor-default pointer-events-auto' : 'cursor-grab active:cursor-grabbing'} ${
                       theme === 'scrapbook'
                         ? 'bg-white border border-stone-200 shadow-sm rotate-[0.5deg] mb-6' 
                       : theme === 'hipster'
@@ -526,7 +660,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                             {(theme === 'scrapbook' || theme === 'hipster') && (
                               <div className="absolute -left-8 top-1/2 -translate-y-1/2 flex flex-col items-center">
                                 <div className={`w-3 h-3 rounded-full bg-white border-2 z-10 ${theme === 'hipster' ? 'border-stone-400 scale-90' : ''}`} style={theme === 'handdrawn' || theme === 'scrapbook' ? { borderColor: 'var(--brand-color)' } : {}} />
-                                {event.time && (
+                                {event.time && theme !== 'hipster' && (
                                   <span className={`text-[8px] font-black mt-1 whitespace-nowrap -rotate-90 ${theme === 'hipster' ? 'text-stone-300 font-hipster' : 'text-stone-400'}`}>{event.time}</span>
                                 )}
                               </div>
@@ -548,52 +682,133 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                             </div>
                           )}
                           <button 
-                            onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                            className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-100'} hover:text-rose-400 transition-colors p-1`}
+                            onClick={(e) => { e.stopPropagation(); !isReadOnly && handleDeleteEvent(event.id); }}
+                            className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-100'} hover:text-rose-400 transition-colors p-1 ${isReadOnly ? 'hidden' : ''}`}
                           >
                               <Trash2 size={14} />
                           </button>
                         </div>
                     </div>
-                    <h3 className={`text-[14px] font-bold leading-tight tracking-normal ${theme === 'hipster' ? 'text-stone-600 font-hipster' : 'text-slate-800'}`}>{event.location}</h3>
+                    <h3 className={`text-[14px] font-bold leading-tight tracking-normal ${theme === 'hipster' ? 'text-stone-600 font-hipster' : 'text-slate-800'}`}>
+                      {event.location}
+                      {event.coordinates && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsMapViewOpen(true);
+                          }}
+                          className="inline-flex ml-1 p-1 text-sky-500 hover:bg-sky-50 rounded-md transition-colors"
+                        >
+                          <MapPin size={12} />
+                        </button>
+                      )}
+                    </h3>
                     {event.notes && <p className={`text-xs font-medium mt-1 italic ${theme === 'hipster' ? 'text-stone-400 font-hipster' : 'text-slate-400'}`}>{event.notes}</p>}
-                </div>
+                </Reorder.Item>
             ))}
+            </Reorder.Group>
+            </div>
             {filteredEvents.length === 0 && selectedDate !== 'PRE_TRIP' && (
               <div className="text-center py-20 text-slate-200 text-[11px] font-black uppercase tracking-[0.2em] italic">No events planned</div>
             )}
-            </div>
         </>
         )}
       </div>
 
       {isModalOpen && selectedDate !== 'PRE_TRIP' && (
         <div className="fixed inset-0 z-[100] bg-black/30 backdrop-blur-sm flex items-end justify-center">
-           <div className="bg-white w-full max-w-[390px] rounded-t-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-10 overflow-y-auto max-h-[90vh]">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-lg font-bold text-slate-800">{editingId ? '編輯行程' : '新增行程'}</h2>
-                <button onClick={() => setIsModalOpen(false)} className="text-slate-300 text-xl">✕</button>
+          <div className="bg-white w-full max-w-[420px] rounded-t-[40px] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom-full duration-300 relative max-h-[90vh] overflow-y-auto no-scrollbar text-left">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-xl font-black text-slate-800">{editingId ? '編輯行程' : '新增計畫'}</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{selectedDate}</p>
               </div>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                 <div>
-                    <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block ml-1 mb-1">目的地名稱</label>
-                    <input type="text" placeholder="目的地名稱" value={newLocation} onChange={e => setNewLocation(e.target.value)} className="w-full text-lg font-bold py-3 border-b-2 border-slate-50 focus:border-sky-400 outline-none transition-colors" required />
-                 </div>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 active:scale-90 transition-transform"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1 mb-1">目的地名稱</label>
+                    <input 
+                      type="text" 
+                      placeholder="目的地名稱" 
+                      value={newLocation} 
+                      onChange={e => {
+                        setNewLocation(e.target.value);
+                        if (fetchError) setFetchError(null);
+                      }} 
+                      className="w-full text-lg font-bold py-3 border-b-2 border-slate-50 focus:border-sky-400 outline-none transition-colors" 
+                      required 
+                    />
+                  </div>
+                  
+                  <button 
+                    type="button"
+                    onClick={() => fetchCoords()}
+                    disabled={isFetchingCoords}
+                    className={`w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98] border-2 shadow-sm ${
+                      isFetchingCoords ? 'bg-slate-50 border-slate-100 text-slate-400' : 
+                      (newCoordinates ? 'bg-emerald-50 border-emerald-500 text-emerald-600 shadow-emerald-50' : 'bg-sky-50 border-sky-500 text-sky-600 shadow-sky-50')
+                    }`}
+                  >
+                    {isFetchingCoords ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        正在搜尋座標中...
+                      </>
+                    ) : newCoordinates ? (
+                      <>
+                        <Check size={14} strokeWidth={3} />
+                        座標獲取成功 (可點擊重試)
+                      </>
+                    ) : (
+                      <>
+                        <Search size={14} />
+                        搜尋並獲取地圖座標
+                      </>
+                    )}
+                  </button>
+
+                  {fetchError && (
+                    <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
+                      <div className="text-center text-[10px] text-rose-500 font-bold bg-rose-50 py-2 rounded-lg border border-rose-100">
+                        {fetchError}
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsPickerOpen(true)}
+                        className="w-full py-3 bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <MapIcon size={12} /> 手動在地圖上選取地點
+                      </button>
+                    </div>
+                  )}
+
+                  {newCoordinates && (
+                    <div className="text-center text-[10px] text-emerald-500 font-bold animate-in fade-in slide-in-from-top-1">
+                      緯度: {newCoordinates.lat.toFixed(4)} / 經度: {newCoordinates.lng.toFixed(4)}
+                    </div>
+                  )}
+                </div>
                  
-                 <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block ml-1">時間 (可選)</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">時間 (可選)</label>
                         <input 
                             type="time" 
                             value={newTime} 
                             onChange={e => setNewTime(e.target.value)} 
-                            className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-1" 
-                            onFocus={(e) => e.target.style.boxShadow = '0 0 0 1px rgba(var(--brand-color-rgb), 0.1)'}
-                            onBlur={(e) => e.target.style.boxShadow = 'none'}
+                            className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border-none outline-none focus:ring-1 transition-all" 
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block ml-1">行程分類</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">行程分類</label>
                         <div className="relative">
                             <select 
                                 value={newCategory} 
@@ -601,9 +816,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                                     if (e.target.value === 'ADD_NEW') { setIsAddingCategory(true); } 
                                     else { setNewCategory(e.target.value); setIsAddingCategory(false); }
                                 }}
-                                className="w-full p-3 bg-slate-50 rounded-2xl text-sm font-bold text-slate-700 border-none outline-none appearance-none pr-8 focus:ring-1"
-                                onFocus={(e) => e.target.style.boxShadow = '0 0 0 1px rgba(var(--brand-color-rgb), 0.1)'}
-                                onBlur={(e) => e.target.style.boxShadow = 'none'}
+                                className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold text-slate-700 border-none outline-none appearance-none pr-10 focus:ring-1 transition-all"
                             >
                                 {Object.entries(CATEGORY_ICONS).map(([name, emoji]) => (
                                     <option key={name} value={name}>{emoji} {name}</option>
@@ -613,47 +826,64 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                                 ))}
                                 <option value="ADD_NEW" className="font-bold" style={{ color: 'var(--brand-color)' }}>+ 新增分類...</option>
                             </select>
-                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                            <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
                         </div>
                     </div>
-                 </div>
+                </div>
 
-                 {isAddingCategory && (
-                    <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <label className="text-[8px] font-bold text-purple-400 mb-1 block">分類名稱</label>
-                                <input type="text" placeholder="例: 練舞" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="w-full p-2 bg-white rounded-lg text-xs font-bold outline-none border border-purple-100 focus:border-purple-300" />
-                            </div>
-                            <div className="w-12">
-                                <label className="text-[8px] font-bold text-purple-400 mb-1 block">圖示</label>
-                                <input type="text" placeholder="💃" value={newCatEmoji} onChange={e => setNewCatEmoji(e.target.value)} className="w-full p-2 bg-white rounded-lg text-center text-xs outline-none border border-purple-100" />
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <button type="button" onClick={() => setIsAddingCategory(false)} className="flex-1 py-1.5 bg-white text-slate-400 text-[10px] font-bold rounded-lg border border-slate-100">取消</button>
-                            <button type="button" onClick={handleAddNewCategory} className="flex-1 py-1.5 text-white text-[10px] font-bold rounded-lg shadow-sm" style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}>新增分類</button>
-                        </div>
-                    </div>
-                 )}
+                {isAddingCategory && (
+                   <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                       <div className="flex gap-2">
+                           <div className="flex-1">
+                               <label className="text-[8px] font-bold text-purple-400 mb-1 block">分類名稱</label>
+                               <input type="text" placeholder="例: 練舞" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="w-full p-2 bg-white rounded-lg text-xs font-bold outline-none border border-purple-100 focus:border-purple-300" />
+                           </div>
+                           <div className="w-12">
+                               <label className="text-[8px] font-bold text-purple-400 mb-1 block">圖示</label>
+                               <input type="text" placeholder="💃" value={newCatEmoji} onChange={e => setNewCatEmoji(e.target.value)} className="w-full p-2 bg-white rounded-lg text-center text-xs outline-none border border-purple-100" />
+                           </div>
+                       </div>
+                       <div className="flex gap-2">
+                           <button type="button" onClick={() => setIsAddingCategory(false)} className="flex-1 py-1.5 bg-white text-slate-400 text-[10px] font-bold rounded-lg border border-slate-100">取消</button>
+                           <button type="button" onClick={handleAddNewCategory} className="flex-1 py-1.5 text-white text-[10px] font-bold rounded-lg shadow-sm" style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}>新增分類</button>
+                       </div>
+                   </div>
+                )}
 
-                 <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block ml-1">備註 (可選)</label>
-                    <textarea placeholder="有些備註想記錄嗎？" value={newNotes} onChange={e => setNewNotes(e.target.value)} className="w-full p-4 bg-slate-50 rounded-xl h-24 outline-none text-xs font-bold text-slate-600 border border-transparent transition-all" onFocus={(e) => e.target.style.borderColor = 'var(--brand-color)'} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
-                 </div>
-                 
-                 <div className="flex gap-3 pt-4">
-                     {editingId && (
-                         <button type="button" onClick={() => handleDeleteEvent()} className="px-5 py-4 bg-rose-50 text-rose-500 font-bold rounded-2xl active:scale-95 transition-all">
-                             <Trash2 size={20} />
-                         </button>
-                     )}
-                     <button type="submit" className="flex-1 py-4 text-white text-base font-bold rounded-2xl shadow-active active:scale-95 transition-all" style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}>
-                        {editingId ? '儲存變更' : '確定新增'}
-                     </button>
-                 </div>
-              </form>
-           </div>
+                <div className="space-y-1">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">備註 (可選)</label>
+                   <textarea 
+                     placeholder="有些備註想記錄嗎？" 
+                     value={newNotes} 
+                     onChange={e => setNewNotes(e.target.value)} 
+                     className="w-full p-4 bg-slate-50 rounded-2xl h-24 outline-none text-xs font-bold text-slate-600 border-2 border-transparent focus:border-slate-100 transition-all no-scrollbar" 
+                   />
+                </div>
+                
+                <div className="flex gap-3 pt-6">
+                    {editingId && (
+                        <button type="button" onClick={() => handleDeleteEvent()} className="px-5 py-4 bg-rose-50 text-rose-500 font-bold rounded-2xl active:scale-95 transition-all">
+                            <Trash2 size={24} />
+                        </button>
+                    )}
+                    <button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className={`flex-1 py-4 text-white text-lg font-bold rounded-2xl shadow-lg active:scale-95 transition-all ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                      style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}
+                    >
+                       {isSubmitting ? (
+                         <div className="flex items-center justify-center gap-2">
+                           <Loader2 size={20} className="animate-spin" />
+                           <span>處理中...</span>
+                         </div>
+                       ) : (
+                         editingId ? '儲存變更' : '確定新增'
+                       )}
+                    </button>
+                </div>
+            </form>
+          </div>
         </div>
       )}
       {isDeleteConfirmOpen && (
@@ -677,6 +907,18 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
             </div>
           </div>
         </div>
+      )}
+
+      {isPickerOpen && (
+        <LocationPicker 
+          initialLocation={newLocation}
+          onSelect={(coords) => {
+            setNewCoordinates(coords);
+            setIsPickerOpen(false);
+            setFetchError(null);
+          }}
+          onClose={() => setIsPickerOpen(false)}
+        />
       )}
       {/* Flight Edit Modal */}
       <AnimatePresence>
@@ -729,15 +971,27 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">航班編號</label>
-                  <input 
-                    type="text" 
-                    placeholder="例如: BR 123"
-                    value={editFlightData.flightNo}
-                    onChange={(e) => setEditFlightData({ ...editFlightData, flightNo: e.target.value.toUpperCase() })}
-                    className="w-full px-5 py-3.5 bg-slate-50 rounded-2xl border-none outline-none text-sm font-bold text-slate-700"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">航班編號</label>
+                    <input 
+                      type="text" 
+                      placeholder="例如: BR 123"
+                      value={editFlightData.flightNo}
+                      onChange={(e) => setEditFlightData({ ...editFlightData, flightNo: e.target.value.toUpperCase() })}
+                      className="w-full px-5 py-3.5 bg-slate-50 rounded-2xl border-none outline-none text-sm font-bold text-slate-700"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">行李重量 (kg)</label>
+                    <input 
+                      type="number" 
+                      placeholder="例如: 23"
+                      value={editFlightData.baggageWeight}
+                      onChange={(e) => setEditFlightData({ ...editFlightData, baggageWeight: e.target.value })}
+                      className="w-full px-5 py-3.5 bg-slate-50 rounded-2xl border-none outline-none text-sm font-bold text-slate-700"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -773,6 +1027,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
           </div>
         )}
       </AnimatePresence>
+      {isMapViewOpen && (
+        <TripMapView 
+          tripId={tripId}
+          events={events}
+          selectedDate={selectedDate}
+          startDate={startDate}
+          onClose={() => setIsMapViewOpen(false)}
+          dates={dates}
+          onDateChange={setSelectedDate}
+        />
+      )}
     </div>
   );
 };

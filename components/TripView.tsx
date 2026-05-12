@@ -44,7 +44,11 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   const [isClaiming, setIsClaiming] = useState(false);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [newMemberName, setNewMemberName] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   const [isDeleteTripModalOpen, setIsDeleteTripModalOpen] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const isReadOnly = trip ? !trip.memberUids.includes(user.uid) && trip.isPublic : false;
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
@@ -273,6 +277,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
         setEditCity(data.city || '');
         setEditStartDate(data.startDate || '');
         setEditEndDate(data.endDate || '');
+        setIsPublic(data.isPublic || false);
       }
     });
 
@@ -495,12 +500,13 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     });
   };
 
-  const handleUpdateTripInfo = async (field: 'name' | 'subtitle' | 'city' | 'startDate' | 'endDate', value: string) => {
+  const handleUpdateTripInfo = async (field: 'name' | 'subtitle' | 'city' | 'startDate' | 'endDate' | 'isPublic', value: any) => {
     if (field === 'name') setEditName(value);
     if (field === 'subtitle') setEditSubtitle(value);
     if (field === 'city') setEditCity(value);
     if (field === 'startDate') setEditStartDate(value);
     if (field === 'endDate') setEditEndDate(value);
+    if (field === 'isPublic') setIsPublic(value);
     await updateDoc(doc(db, 'trips', tripId), { 
       [field]: value,
       updatedAt: serverTimestamp()
@@ -522,8 +528,16 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   };
 
   const handleDeleteMember = async () => {
-    if (!memberToDelete) return;
+    if (!memberToDelete || !trip) return;
     try {
+      // 1. Remove from memberUids array on the trip document
+      const updatedUids = trip.memberUids.filter(id => id !== memberToDelete);
+      await updateDoc(doc(db, 'trips', tripId), { 
+        memberUids: updatedUids,
+        updatedAt: serverTimestamp()
+      });
+      
+      // 2. Delete the member document from subcollection
       await deleteDoc(doc(db, 'trips', tripId, 'members', memberToDelete));
       setMemberToDelete(null);
     } catch (err) {
@@ -557,11 +571,11 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     if (!trip) return <div className="flex-1 flex items-center justify-center text-slate-300 font-bold uppercase tracking-widest">Loading Trip...</div>;
 
     switch (activeTab) {
-      case Tab.SCHEDULE: return <ScheduleView members={members} tripId={tripId} startDate={trip.startDate} endDate={trip.endDate} theme={user.profileTheme} />;
-      case Tab.EXPENSE: return <ExpenseView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} />;
-      case Tab.PLANNING: return <PlanningView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} />;
-      case Tab.JOURNAL: return <JournalView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} />;
-      default: return <ScheduleView members={members} tripId={tripId} startDate={trip.startDate} endDate={trip.endDate} />;
+      case Tab.SCHEDULE: return <ScheduleView members={members} tripId={tripId} startDate={trip.startDate} endDate={trip.endDate} theme={user.profileTheme} isReadOnly={isReadOnly} />;
+      case Tab.EXPENSE: return <ExpenseView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} isReadOnly={isReadOnly} />;
+      case Tab.PLANNING: return <PlanningView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} isReadOnly={isReadOnly} />;
+      case Tab.JOURNAL: return <JournalView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} isReadOnly={isReadOnly} />;
+      default: return <ScheduleView members={members} tripId={tripId} startDate={trip.startDate} endDate={trip.endDate} isReadOnly={isReadOnly} />;
     }
   };
 
@@ -573,6 +587,12 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     <div className={`h-full flex flex-col w-full max-w-md mx-auto relative overflow-hidden transition-colors duration-500`}>
       {/* Background doodles are handled by App.tsx */}
       {/* Header */}
+      {isReadOnly && (
+        <div className="bg-sky-500 text-white text-[10px] font-black py-2 px-6 flex items-center justify-center gap-2 uppercase tracking-widest z-[70] shadow-sm">
+          <Sparkles size={12} />
+          您正在以「唯讀模式」查看此公開旅程
+        </div>
+      )}
       <div className={`px-6 pt-8 pb-2 shrink-0 flex flex-col gap-4 relative z-30`} style={{ 
         backgroundColor: 'transparent'
       }}>
@@ -908,6 +928,25 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
 
               <div className="space-y-6">
                 <div>
+                  <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 mb-3 block">隱私設定</label>
+                  <div className={`p-4 ${user.profileTheme === 'handdrawn' ? 'border-b border-stone-200' : 'bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between'}`}>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-700">公開查看旅程</h4>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">開啟後，任何人都可以透過連結查看您的行程，不需加入成員。</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateTripInfo('isPublic', !isPublic)}
+                      className={`w-12 h-6 rounded-full transition-colors relative flex items-center px-1 ${isPublic ? 'bg-sky-500' : 'bg-slate-300'}`}
+                    >
+                      <motion.div 
+                        animate={{ x: isPublic ? 24 : 0 }}
+                        className="w-4 h-4 bg-white rounded-full shadow-sm"
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
                   <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 mb-3 block">旅程資訊</label>
                   <div className="space-y-3">
                     <div className={`${user.profileTheme === 'handdrawn' ? 'p-3' : 'bg-slate-50 p-3 rounded-2xl border border-slate-100'}`}>
@@ -1067,12 +1106,36 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
               </div>
 
               <div className="mt-10 flex flex-col gap-3">
-                <button 
-                  onClick={() => setIsDeleteTripModalOpen(true)}
-                  className="w-full py-4 bg-rose-50 text-rose-500 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={18} /> 刪除旅程
-                </button>
+                {trip?.ownerUid === user.uid ? (
+                  <button 
+                    onClick={() => setIsDeleteTripModalOpen(true)}
+                    className="w-full py-4 bg-rose-50 text-rose-500 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={18} /> 刪除旅程
+                  </button>
+                ) : (
+                  <button 
+                    onClick={async () => {
+                      if (confirm(`確定要退出「${trip?.name}」嗎？`)) {
+                        try {
+                          setIsExiting(true);
+                          const updatedMembers = trip!.memberUids.filter(id => id !== user.uid);
+                          await updateDoc(doc(db, 'trips', tripId), { memberUids: updatedMembers });
+                          await deleteDoc(doc(db, 'trips', tripId, 'members', user.uid));
+                          navigate('/');
+                        } catch (err) {
+                          console.error("Exit failed:", err);
+                        } finally {
+                          setIsExiting(false);
+                        }
+                      }
+                    }}
+                    disabled={isExiting}
+                    className="w-full py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isExiting ? <Loader2 size={18} className="animate-spin" /> : <LogOut size={18} />} 退出旅程
+                  </button>
+                )}
                 <button 
                   onClick={() => setIsSettingsOpen(false)}
                   className="w-full py-4 bg-slate-900 text-white rounded-xl font-black text-sm shadow-xl active:scale-95 transition-all"
@@ -1158,12 +1221,13 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 <Trash2 size={32} />
               </div>
               <h3 className="text-xl font-black text-slate-800 mb-2 font-sans">刪除旅程？</h3>
-              <p className="text-slate-400 text-xs font-bold mb-8 leading-relaxed font-sans">
-                確定要刪除旅程嗎？此動作無法復原，所有資料將會消失。
+              <p className="text-slate-400 text-xs font-bold mb-8 leading-relaxed font-sans px-4">
+                確定要刪除旅程嗎？此動作將會「永久刪除」旅程內的所有行程、記帳與照片，所有成員都將失去存取權，且無法復原。
               </p>
               <div className="flex gap-3">
                 <button 
                   onClick={() => setIsDeleteTripModalOpen(false)}
+                  disabled={isDeleting}
                   className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-500 text-xs font-black active:scale-95 transition-all"
                 >
                   取消
@@ -1171,16 +1235,19 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                 <button 
                   onClick={async () => {
                     try {
+                      setIsDeleting(true);
                       await deleteDoc(doc(db, 'trips', tripId));
                       navigate('/');
                     } catch (err) {
                       console.error("Delete failed:", err);
                       alert("刪除失敗");
+                      setIsDeleting(false);
                     }
                   }}
-                  className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-100 active:scale-95 transition-all"
+                  disabled={isDeleting}
+                  className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-100 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
-                  確定刪除
+                  {isDeleting ? <Loader2 size={14} className="animate-spin" /> : '確定刪除'}
                 </button>
               </div>
             </motion.div>
@@ -1264,31 +1331,40 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
               </div>
 
               <div className="w-full bg-slate-50 p-6 rounded-[32px] border border-slate-100 mb-8 flex flex-col items-center gap-4">
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">旅程專屬編號</div>
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  {trip?.isPublic ? '公開查看連結' : '成員邀請編號'}
+                </div>
                 <div className="text-xl font-black text-sky-600 tracking-wider break-all text-center font-mono">
-                  {trip?.inviteCode || tripId.substring(0, 8)}
+                  {trip?.isPublic ? tripId.substring(0, 12) + '...' : (trip?.inviteCode || tripId.substring(0, 8))}
                 </div>
                 <button 
-                  onClick={() => copyToClipboard(trip?.inviteCode || tripId.substring(0, 8))}
+                  onClick={() => {
+                    const text = trip?.isPublic 
+                      ? `${window.location.origin}/trip/${tripId}` 
+                      : (trip?.inviteCode || tripId.substring(0, 8));
+                    copyToClipboard(text);
+                  }}
                   className="px-4 py-2 bg-white rounded-full text-[10px] font-black border shadow-sm active:scale-95 transition-all"
                   style={{ color: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.2)' }}
                 >
-                  {isCopied ? '已複製編號' : '點擊複製編號'}
+                  {isCopied ? '已複製' : trip?.isPublic ? '點擊複製公開連結' : '點擊複製編號'}
                 </button>
               </div>
 
-              <button 
-                onClick={() => {
-                  const displayCode = trip?.inviteCode || tripId.substring(0, 8);
-                  const url = `${window.location.origin}?tripId=${displayCode}`;
-                  copyToClipboard(url);
-                  setIsQrModalOpen(false);
-                }}
-                className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-                style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.2)' }}
-              >
-                <Check size={18} /> {isCopied ? '已複製邀請連結' : '直接複製邀請連結'}
-              </button>
+              {!trip?.isPublic && (
+                <button 
+                  onClick={() => {
+                    const displayCode = trip?.inviteCode || tripId.substring(0, 8);
+                    const url = `${window.location.origin}?tripId=${displayCode}`;
+                    copyToClipboard(url);
+                    setIsQrModalOpen(false);
+                  }}
+                  className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                  style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.2)' }}
+                >
+                  <Check size={18} /> {isCopied ? '已複製邀請連結' : '直接複製邀請連結'}
+                </button>
+              )}
             </motion.div>
           </div>
         )}

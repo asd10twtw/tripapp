@@ -43,40 +43,43 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
     setTotalTravelDays(days);
 
     // Calculate top city (Most visited destination)
+    // Consistent logic with MemberProfileModal.tsx
     const now = new Date().getTime();
     const cityStats: Record<string, { count: number, latestCompletedDate: number }> = {};
+    
     trips.forEach(t => {
       if (t.city) {
-        const individualCities = t.city.split(/[\+]+/).filter(Boolean);
+        // Handle multiple delimiters (+ or /) and trim
+        const individualCities = t.city.split(/[\+\/]+/).map(c => c.trim()).filter(Boolean);
         const tripEndDate = t.endDate ? new Date(t.endDate).getTime() : 0;
-        const isCompleted = tripEndDate > 0 && tripEndDate <= now;
+        // A trip is considered completed only AFTER the end day has passed (next day midnight)
+        const isCompleted = tripEndDate > 0 && (tripEndDate + 86400000) <= now;
         
-        individualCities.forEach(city => {
-          const trimmedCity = city.trim();
-          if (trimmedCity) {
-            if (!cityStats[trimmedCity]) {
-              cityStats[trimmedCity] = { count: 0, latestCompletedDate: 0 };
-            }
-            cityStats[trimmedCity].count += 1;
-            // Only update latest date if the trip is actually COMPLETED
-            if (isCompleted && tripEndDate > cityStats[trimmedCity].latestCompletedDate) {
-              cityStats[trimmedCity].latestCompletedDate = tripEndDate;
-            }
+        individualCities.forEach(trimmedCity => {
+          if (!cityStats[trimmedCity]) {
+            cityStats[trimmedCity] = { count: 0, latestCompletedDate: 0 };
+          }
+          cityStats[trimmedCity].count += 1;
+          if (isCompleted && tripEndDate > cityStats[trimmedCity].latestCompletedDate) {
+            cityStats[trimmedCity].latestCompletedDate = tripEndDate;
           }
         });
       }
     });
 
     const sortedCities = Object.entries(cityStats).sort((a, b) => {
-      // Sort by count DESC, then by latestCompletedDate DESC
+      // Primary: Visit count DESC
       if (b[1].count !== a[1].count) {
         return b[1].count - a[1].count;
       }
+      // Secondary: Latest completed date DESC (most recent completed trip wins tie)
       return b[1].latestCompletedDate - a[1].latestCompletedDate;
     });
 
     if (sortedCities.length > 0) {
       setTopCityStat(sortedCities[0][0]);
+    } else {
+      setTopCityStat("尚未設定");
     }
 
     // Calculate personal annual spending - Sync logic with ExpenseView.tsx for absolute accuracy
@@ -402,27 +405,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
     return () => window.removeEventListener('message', handleMessage);
   }, [user.uid]);
 
-  const completedTripsCount = trips.filter(t => new Date(t.endDate) < new Date()).length;
-  
-  const cityCounts: Record<string, number> = {};
-  trips.forEach(t => {
-    if (t.city) {
-      cityCounts[t.city] = (cityCounts[t.city] || 0) + 1;
-    }
-  });
-  const sortedCities = Object.entries(cityCounts).sort((a, b) => b[1] - a[1]);
-  const topCity = sortedCities.length > 0 ? sortedCities[0][0] : "尚未設定";
-
   return (
-    <div className={`flex-1 min-h-0 overflow-y-auto no-scrollbar pb-32 pt-4 relative ${styles.container} ${styles.font}`}>
+    <div className={`flex-1 min-h-0 overflow-y-auto no-scrollbar pb-32 pt-4 relative`}>
       <div className="px-6 pt-4 pb-6">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`relative transition-all duration-500 ${styles.card} ${
-            user.profileTheme === 'handdrawn' ? 'rotate-[0.5deg] p-6 pb-8' : 
+          className={`relative transition-all duration-500 ${
+            user.profileTheme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35] rotate-[0.5deg] p-6 pb-8 shadow-[8px_8px_0_0_rgba(75,63,53,0.05)]' : 
             user.profileTheme === 'hipster' ? 'rounded-none border border-stone-200 !p-8 bg-white shadow-sm' :
-            'rounded-[32px] p-6'
+            'bg-white rounded-[40px] p-6 shadow-soft border border-slate-50'
           }`}
         >
           {user.profileTheme === 'handdrawn' && (
@@ -573,19 +565,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, trips }) => {
                 </div>
               )}
 
-              {user.profileTheme === 'hipster' && (
+              {user.profileTheme === 'hipster' && user.interests && user.interests.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {user.interests && user.interests.length > 0 ? (
-                    user.interests.map((interest, idx) => (
-                      <div key={idx} className="px-2 py-0.5 border border-stone-200 text-[7px] font-hipster text-stone-400 uppercase tracking-widest italic shrink-0">
-                        {interest}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-2 py-0.5 border border-stone-200 text-[7px] font-hipster text-stone-400 uppercase tracking-widest italic shrink-0">
-                      Adventurer
+                  {user.interests.map((interest, idx) => (
+                    <div key={idx} className="px-2 py-0.5 border border-stone-200 text-[7px] font-hipster text-stone-400 uppercase tracking-widest italic shrink-0">
+                      {interest}
                     </div>
-                  )}
+                  ))}
                   <div className="px-2 py-0.5 bg-stone-100 text-[6px] font-hipster text-stone-400 uppercase tracking-widest hidden sm:block shrink-0">
                     {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC
                   </div>
