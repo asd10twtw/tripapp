@@ -65,12 +65,13 @@ export interface ScheduleEvent {
   time: string; // HH:MM
   title: string;
   location: string;
-  category: EventCategory;
+  category?: EventCategory;
   notes?: string;
   mapLink?: string;
   coordinates?: { lat: number; lng: number };
   createdAt?: string;
   sortOrder?: number;
+  isFlight?: boolean;
 }
 
 export interface PreTripTask {

@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Trip, UserProfile } from '../types';
+import { Trip, UserProfile, ScheduleEvent } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, MapPin, Award, Calendar, Sparkles, Heart, Compass, Plane, Tent, Ticket, Camera, Footprints, Flag, Loader2, Image as ImageIcon, Check, Scissors, ChevronRight } from 'lucide-react';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { X, MapPin, Award, Calendar, Sparkles, Heart, Compass, Plane, Tent, Ticket, Camera, Footprints, Flag, Loader2, Image as ImageIcon, Check, Scissors, ChevronRight, ChevronLeft } from 'lucide-react';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import Cropper from 'react-easy-crop';
 
@@ -34,6 +34,10 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
 
   const isOwnProfile = auth.currentUser?.uid === memberId;
 
+  const [selectedTripSummary, setSelectedTripSummary] = useState<Trip | null>(null);
+  const [summaryEvents, setSummaryEvents] = useState<ScheduleEvent[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
@@ -52,42 +56,40 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
         const tripsSnap = await getDocs(tripsQuery);
         const tripsDocs = tripsSnap.docs || [];
         
-        // Ensure user is truly a member before showing
-        const validTripsItems = tripsDocs.filter(doc => {
-          const tripData = doc.data();
-          return tripData && tripData.memberUids && Array.isArray(tripData.memberUids) && tripData.memberUids.includes(memberId);
-        });
+        const verifiedTrips: Trip[] = [];
+        const now = new Date().getTime();
 
-        setTripCount(validTripsItems.length);
-
-        // Filter public trips for display with deep validation
-        const publicDocs = validTripsItems
-          .map(doc => ({ id: doc.id, ...doc.data() } as Trip))
-          .filter(t => t && t.isPublic);
-        
-        // Safety check to ensure subcollection document exists
-        const verifiedPublicTrips: Trip[] = [];
-        for (const trip of publicDocs) {
+        for (const tripDoc of tripsDocs) {
           try {
-            const memberDocRef = doc(db, 'trips', trip.id, 'members', memberId);
-            const memberSnap = await getDoc(memberDocRef);
-            if (memberSnap.exists()) {
-              verifiedPublicTrips.push(trip);
+            const tripData = tripDoc.data() as Trip;
+            if (tripData && tripData.memberUids && tripData.memberUids.includes(memberId)) {
+              // Deep validation: check if the member subcollection document exists
+              const memberDocRef = doc(db, 'trips', tripDoc.id, 'members', memberId);
+              const memberSnap = await getDoc(memberDocRef);
+              if (memberSnap.exists()) {
+                verifiedTrips.push({ id: tripDoc.id, ...tripData });
+              }
             }
           } catch (e) {
-             console.error("Deep validation failed for trip:", trip.id, e);
+            console.error("Verification failed for trip:", tripDoc.id, e);
           }
         }
-        setPublicTrips(verifiedPublicTrips);
+
+        setTripCount(verifiedTrips.length);
+        
+        // Only show completed trips
+        const completed = verifiedTrips.filter(t => {
+          if (!t.endDate) return false;
+          const end = new Date(t.endDate).getTime();
+          return end + 86400000 <= now; // Past the end date
+        }).sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime());
+        
+        setPublicTrips(completed);
 
         let days = 0;
-        const now = new Date().getTime();
         const cityStats: Record<string, { count: number, latestCompletedDate: number }> = {};
 
-        tripsDocs.forEach(doc => {
-          const trip = doc.data();
-          if (!trip) return;
-
+        verifiedTrips.forEach(trip => {
           // Calculate Days
           if (trip.startDate && trip.endDate) {
             const start = new Date(trip.startDate);
@@ -127,8 +129,13 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
           setTopCity(sortedCities[0][0]);
         }
 
-      } catch (err) {
-        console.error("Failed to fetch member data:", err);
+      } catch (err: any) {
+        // Handle offline error or other fetching issues gracefully
+        if (err?.message?.includes('offline')) {
+          console.warn("Client is offline, showing cached or limited data.");
+        } else {
+          console.error("Failed to fetch member data:", err);
+        }
       } finally {
         setLoading(false);
       }
@@ -240,6 +247,73 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
   // Handle clicking overlay to close
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose();
+  };
+
+  const handleShowSummary = async (trip: Trip) => {
+    setSelectedTripSummary(trip);
+    setSummaryLoading(true);
+    try {
+      // Fetch Events
+      const q = query(collection(db, 'trips', trip.id, 'events'), orderBy('date'), orderBy('time'));
+      const snap = await getDocs(q);
+      const events = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduleEvent));
+      
+      // Fetch Flight Info
+      const flightDoc = await getDoc(doc(db, 'trips', trip.id, 'config', 'flightInfo'));
+      if (flightDoc.exists()) {
+        const flightData = flightDoc.data();
+        
+        // Inject Departure
+        if (flightData.departure) {
+          events.push({
+            id: `dep-${trip.id}`,
+            date: trip.startDate,
+            time: flightData.departure.time,
+            title: `飛機起飛 (${flightData.departure.flightNo})`,
+            location: `${flightData.departure.from} → ${flightData.departure.to}`,
+            isFlight: true
+          });
+          if (flightData.departure.arrivalTime) {
+            events.push({
+              id: `dep-arr-${trip.id}`,
+              date: trip.startDate,
+              time: flightData.departure.arrivalTime,
+              title: `飛機抵達`,
+              location: flightData.departure.to,
+              isFlight: true
+            });
+          }
+        }
+        
+        // Inject Return
+        if (flightData.return) {
+          events.push({
+            id: `ret-${trip.id}`,
+            date: trip.endDate,
+            time: flightData.return.time,
+            title: `飛機起飛 (${flightData.return.flightNo})`,
+            location: `${flightData.return.from} → ${flightData.return.to}`,
+            isFlight: true
+          });
+          if (flightData.return.arrivalTime) {
+            events.push({
+              id: `ret-arr-${trip.id}`,
+              date: trip.endDate,
+              time: flightData.return.arrivalTime,
+              title: `飛機抵達`,
+              location: flightData.return.to,
+              isFlight: true
+            });
+          }
+        }
+      }
+
+      setSummaryEvents(events);
+    } catch (err) {
+      console.error("Failed to fetch summary:", err);
+    } finally {
+      setSummaryLoading(false);
+    }
   };
 
   const theme = profile?.profileTheme || 'minimalist';
@@ -377,7 +451,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
                 />
               </div>
 
-              <h2 className={`text-4xl font-black mb-2 ${
+              <h2 className={`text-3xl sm:text-4xl font-black mb-1 ${
                 theme === 'handdrawn' ? 'text-[#4B3F35] font-handdrawn' :
                 theme === 'hipster' ? 'text-stone-700 font-hipster tracking-tight' :
                 'text-slate-800'
@@ -387,12 +461,12 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
 
               {/* Interests / Tags - MOVED BELOW NAME */}
               {profile?.interests && profile.interests.length > 0 && (
-                <div className="w-full mb-4">
-                  <div className="flex flex-wrap justify-center gap-2 pt-0">
+                <div className="w-full mb-3">
+                  <div className="flex flex-wrap justify-center gap-1.5 pt-0">
                     {profile.interests.map((interest, i) => (
                       <span 
                         key={i} 
-                        className={`px-3 py-1.5 text-[10px] font-black rounded-xl border transition-all ${
+                        className={`px-2.5 py-1 text-[10px] font-black rounded-lg border transition-all ${
                           theme === 'handdrawn' ? 'bg-white border-[#4B3F35] text-[#4B3F35]' : 'bg-white border-slate-100'
                         }`}
                         style={theme !== 'handdrawn' ? { color: brandColor, borderColor: `rgba(${brandColorRGB}, 0.2)`, backgroundColor: `rgba(${brandColorRGB}, 0.03)` } : {}}
@@ -454,23 +528,21 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
                 </div>
               )}
 
-              {/* Public Trips Section */}
+              {/* Completed Trips Section */}
               {publicTrips.length > 0 && (
                 <div className="w-full mt-10 text-left">
                   <div className="flex items-center gap-2 mb-4 px-2">
-                    <Sparkles size={14} style={{ color: brandColor }} />
+                    <Award size={14} style={{ color: brandColor }} />
                     <h4 className={`text-[12px] font-black uppercase tracking-widest ${theme === 'handdrawn' ? 'text-[#4B3F35]' : 'text-slate-800'}`}>
-                      公開分享的旅程
+                      已完成的旅程
                     </h4>
                   </div>
                   <div className="space-y-3">
                     {publicTrips.map(trip => (
-                      <a 
+                      <button 
                         key={trip.id}
-                        href={`/trip/${trip.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`block p-4 transition-all active:scale-[0.98] ${
+                        onClick={() => handleShowSummary(trip)}
+                        className={`w-full text-left block p-4 transition-all active:scale-[0.98] ${
                           theme === 'handdrawn' ? 'bg-white border border-[#4B3F35] rounded-xl hover:shadow-sm' :
                           'bg-slate-50 border border-slate-100 rounded-2xl hover:bg-slate-100'
                         }`}
@@ -486,12 +558,110 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
                           </div>
                           <ChevronRight size={16} className="text-slate-300 shrink-0" />
                         </div>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
             </div>            
+
+            {/* Trip Summary Overlay */}
+            <AnimatePresence>
+              {selectedTripSummary && (
+                <motion.div 
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                  className="absolute inset-0 z-50 bg-white flex flex-col"
+                >
+                  <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                    <button 
+                      onClick={() => setSelectedTripSummary(null)}
+                      className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <ChevronLeft size={24} strokeWidth={3} />
+                    </button>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest truncate max-w-[200px]">
+                      {selectedTripSummary.name}
+                    </h3>
+                    <div className="w-10" /> {/* Spacer */}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
+                    {summaryLoading ? (
+                      <div className="h-full flex items-center justify-center">
+                        <Loader2 className="animate-spin text-slate-200" size={32} />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative h-40 rounded-[32px] overflow-hidden mb-8">
+                          <img src={selectedTripSummary.coverImage} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                          <div className="absolute bottom-6 left-6 text-white">
+                             <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">{selectedTripSummary.city}</div>
+                             <div className="text-xl font-black">{selectedTripSummary.subtitle}</div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          {summaryEvents.length > 0 ? (
+                            // Group by date and sort within each day
+                            Object.entries(summaryEvents.reduce((acc: Record<string, ScheduleEvent[]>, event) => {
+                              const date = event.date;
+                              if (!acc[date]) acc[date] = [];
+                              acc[date].push(event);
+                              return acc;
+                            }, {}))
+                            .sort((a, b) => a[0].localeCompare(b[0]))
+                            .map(([date, events]: [string, ScheduleEvent[]]) => {
+                              // Sort: items with time first, then by time
+                              const sortedDayEvents = [...events].sort((a, b) => {
+                                if (a.time && !b.time) return -1;
+                                if (!a.time && b.time) return 1;
+                                if (a.time && b.time) return a.time.localeCompare(b.time);
+                                return 0;
+                              });
+
+                              return (
+                                <div key={date} className="relative pl-6 border-l-2 border-slate-50 space-y-4">
+                                  <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-4" style={{ borderColor: brandColor }} />
+                                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                                    {new Date(date).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric', weekday: 'short' })}
+                                  </div>
+                                  <div className="space-y-4">
+                                    {sortedDayEvents.map((ev, idx) => (
+                                      <div key={idx} className="flex gap-3">
+                                        <div className="text-[10px] font-black text-slate-300 w-8 tabular-nums pt-1">{ev.time || '--:--'}</div>
+                                        <div className="flex-1">
+                                          <div className="text-[13px] font-bold text-slate-700">
+                                            {ev.isFlight ? ev.title : (ev.location || '未命名行程')}
+                                          </div>
+                                          {(ev.isFlight ? ev.location : ev.notes) && (
+                                            <div className="text-[10px] font-bold text-slate-400">
+                                              {ev.isFlight ? ev.location : ev.notes}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-center py-20 text-slate-300 font-black uppercase tracking-widest text-[10px]">
+                              本旅程尚未記錄行程
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Footer decoration */}
             <div className={`h-2 w-full mt-auto ${theme === 'handdrawn' ? 'bg-[#4B3F35]' : ''}`}
                  style={theme !== 'handdrawn' ? { backgroundColor: brandColor } : {}} />

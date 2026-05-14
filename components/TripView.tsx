@@ -7,7 +7,7 @@ import { ExpenseView } from './ExpenseView';
 import { PlanningView } from './PlanningView';
 import { JournalView } from './JournalView';
 import { MemberProfileModal } from './MemberProfileModal';
-import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, Download, FileSpreadsheet, ChevronLeft, ChevronRight, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints, Trash2 } from 'lucide-react';
+import { Calendar, CircleDollarSign, BookOpen, ShoppingBag, Settings, LogOut, Download, FileSpreadsheet, ChevronLeft, ChevronRight, Plus, Image as ImageIcon, UserPlus, UserCheck, Loader2, AlertCircle, Share2, Scissors, Check, X, Star, Award, MapPin, Heart, Compass, Plane, Tent, Ticket, Camera, Pencil, Sparkles, Footprints, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDocs, query, orderBy, addDoc, limit, arrayUnion, deleteDoc, writeBatch, where, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -47,8 +47,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [isDeleteTripModalOpen, setIsDeleteTripModalOpen] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
-  const isReadOnly = trip ? !trip.memberUids.includes(user.uid) && trip.isPublic : false;
+  const isReadOnly = false; // Public sharing removed
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
@@ -277,7 +276,6 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
         setEditCity(data.city || '');
         setEditStartDate(data.startDate || '');
         setEditEndDate(data.endDate || '');
-        setIsPublic(data.isPublic || false);
       }
     });
 
@@ -500,13 +498,12 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     });
   };
 
-  const handleUpdateTripInfo = async (field: 'name' | 'subtitle' | 'city' | 'startDate' | 'endDate' | 'isPublic', value: any) => {
+  const handleUpdateTripInfo = async (field: 'name' | 'subtitle' | 'city' | 'startDate' | 'endDate', value: any) => {
     if (field === 'name') setEditName(value);
     if (field === 'subtitle') setEditSubtitle(value);
     if (field === 'city') setEditCity(value);
     if (field === 'startDate') setEditStartDate(value);
     if (field === 'endDate') setEditEndDate(value);
-    if (field === 'isPublic') setIsPublic(value);
     await updateDoc(doc(db, 'trips', tripId), { 
       [field]: value,
       updatedAt: serverTimestamp()
@@ -928,25 +925,6 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
 
               <div className="space-y-6">
                 <div>
-                  <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 mb-3 block">隱私設定</label>
-                  <div className={`p-4 ${user.profileTheme === 'handdrawn' ? 'border-b border-stone-200' : 'bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between'}`}>
-                    <div>
-                      <h4 className="text-sm font-black text-slate-700">公開查看旅程</h4>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">開啟後，任何人都可以透過連結查看您的行程，不需加入成員。</p>
-                    </div>
-                    <button 
-                      onClick={() => handleUpdateTripInfo('isPublic', !isPublic)}
-                      className={`w-12 h-6 rounded-full transition-colors relative flex items-center px-1 ${isPublic ? 'bg-sky-500' : 'bg-slate-300'}`}
-                    >
-                      <motion.div 
-                        animate={{ x: isPublic ? 24 : 0 }}
-                        className="w-4 h-4 bg-white rounded-full shadow-sm"
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                <div>
                   <label className="text-[10px] font-black text-slate-300 uppercase tracking-widest ml-1 mb-3 block">旅程資訊</label>
                   <div className="space-y-3">
                     <div className={`${user.profileTheme === 'handdrawn' ? 'p-3' : 'bg-slate-50 p-3 rounded-2xl border border-slate-100'}`}>
@@ -1332,39 +1310,35 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
 
               <div className="w-full bg-slate-50 p-6 rounded-[32px] border border-slate-100 mb-8 flex flex-col items-center gap-4">
                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {trip?.isPublic ? '公開查看連結' : '成員邀請編號'}
+                  成員邀請編號
                 </div>
                 <div className="text-xl font-black text-sky-600 tracking-wider break-all text-center font-mono">
-                  {trip?.isPublic ? tripId.substring(0, 12) + '...' : (trip?.inviteCode || tripId.substring(0, 8))}
+                  {trip?.inviteCode || tripId.substring(0, 8)}
                 </div>
                 <button 
                   onClick={() => {
-                    const text = trip?.isPublic 
-                      ? `${window.location.origin}/trip/${tripId}` 
-                      : (trip?.inviteCode || tripId.substring(0, 8));
+                    const text = trip?.inviteCode || tripId.substring(0, 8);
                     copyToClipboard(text);
                   }}
                   className="px-4 py-2 bg-white rounded-full text-[10px] font-black border shadow-sm active:scale-95 transition-all"
                   style={{ color: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.2)' }}
                 >
-                  {isCopied ? '已複製' : trip?.isPublic ? '點擊複製公開連結' : '點擊複製編號'}
+                  {isCopied ? '已複製編號' : '複製編號'}
                 </button>
               </div>
 
-              {!trip?.isPublic && (
-                <button 
-                  onClick={() => {
-                    const displayCode = trip?.inviteCode || tripId.substring(0, 8);
-                    const url = `${window.location.origin}?tripId=${displayCode}`;
-                    copyToClipboard(url);
-                    setIsQrModalOpen(false);
-                  }}
-                  className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-                  style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.2)' }}
-                >
-                  <Check size={18} /> {isCopied ? '已複製邀請連結' : '直接複製邀請連結'}
-                </button>
-              )}
+              <button 
+                onClick={() => {
+                  const displayCode = trip?.inviteCode || tripId.substring(0, 8);
+                  const url = `${window.location.origin}?tripId=${displayCode}`;
+                  copyToClipboard(url);
+                  setIsQrModalOpen(false);
+                }}
+                className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                style={{ backgroundColor: 'var(--brand-color)', boxShadow: '0 10px 15px -3px rgba(var(--brand-color-rgb), 0.2)' }}
+              >
+                <Check size={18} /> {isCopied ? '已複製邀請連結' : '複製邀請連結'}
+              </button>
             </motion.div>
           </div>
         )}

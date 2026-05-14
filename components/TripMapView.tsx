@@ -7,6 +7,8 @@ import { X, Navigation, MapPin, ChevronRight, Edit2, Loader2, Search } from 'luc
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
+declare const google: any;
+
 interface TripMapViewProps {
   tripId: string;
   events: ScheduleEvent[];
