@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Trip, UserProfile, ScheduleEvent } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, MapPin, Award, Calendar, Sparkles, Heart, Compass, Plane, Tent, Ticket, Camera, Footprints, Flag, Loader2, Image as ImageIcon, Check, Scissors, ChevronRight, ChevronLeft } from 'lucide-react';
+import { X, MapPin, Award, Calendar, Sparkles, Heart, Compass, Plane, Tent, Ticket, Camera, Footprints, Flag, Loader2, Image as ImageIcon, Check, Scissors, ChevronRight, ChevronLeft, Mountain } from 'lucide-react';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import Cropper from 'react-easy-crop';
@@ -338,7 +338,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
         initial={{ opacity: 0, scale: 0.9, y: 30 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, y: 30 }}
-        className={`relative w-full max-w-sm overflow-hidden shadow-2xl ${
+        className={`relative w-[94%] max-w-[460px] max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl ${
           theme === 'handdrawn' ? 'bg-[#FCF9F2] rounded-none border-2 border-[#4B3F35]' :
           theme === 'scrapbook' ? 'bg-[#FDFBF7] rounded-[32px] border-4 border-white shadow-xl' :
           theme === 'hipster' ? 'bg-white rounded-none border border-stone-200' :
@@ -509,28 +509,60 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
                 </div>
               </div>
 
-              {/* Motto Box */}
+              {/* Motto Section - Theme Specific Designs */}
               {profile?.motto && (
-                <div className={`w-full p-8 mb-6 relative ${
-                  theme === 'handdrawn' ? 'bg-white border-2 border-[#4B3F35] rounded-xl' :
-                  theme === 'scrapbook' ? 'bg-[#FEFAF3] rounded-3xl border border-stone-200 shadow-sm' :
-                  theme === 'hipster' ? 'bg-stone-50 border border-stone-100' :
-                  'bg-slate-50 rounded-[32px] border border-slate-100/50'
-                }`}
-                  style={theme === 'handdrawn' ? { clipPath: 'polygon(0% 1%, 100% 0%, 99% 100%, 1% 99%)' } : {}}
-                >
-                  <Sparkles className="absolute -top-3 -left-1 text-amber-400" size={24} />
-                  <p className={`text-[15px] leading-relaxed font-bold ${
-                    theme === 'handdrawn' ? 'text-stone-600' : 'text-slate-600 italic'
-                  }`}>
-                    {profile.motto}
-                  </p>
+                <div className="w-full mb-1 flex justify-center">
+                  {theme === 'handdrawn' ? (
+                    <div className="relative group px-1 mb-1 mt-2 max-w-[70%]">
+                      {/* Tape Design - Top Left */}
+                      <div className="absolute -top-2 left-2 w-10 h-4 bg-[#DAC7B1] -rotate-3 z-10 border border-[#C8B59F]/20 shadow-sm opacity-80" />
+                      
+                      {/* Note Card */}
+                      <div className="relative transform rotate-1 px-6 py-3 bg-[#F5E6D3] rounded-sm border border-[#4B3F35]/10 shadow-[2px_2px_10px_rgba(0,0,0,0.03)] overflow-hidden">
+                        <p className="text-[12px] leading-snug font-bold text-[#5D4037]/80 text-center italic tracking-wide relative z-10">
+                          {profile.motto}
+                        </p>
+                        
+                        {/* Plane Doodle - Top Right */}
+                        <div className="absolute top-2 right-2 opacity-10 transform scale-75">
+                          <Plane size={14} className="text-[#5D4037]" />
+                        </div>
+                        
+                        {/* Mountain Doodle - Bottom Right */}
+                        <div className="absolute bottom-2 right-2 opacity-15 transform scale-90">
+                          <Mountain size={14} className="text-[#5D4037]" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : theme === 'scrapbook' ? (
+                    <div className="px-6 py-2 bg-white/80 backdrop-blur-sm rounded-lg border border-stone-100 shadow-sm rotate-1 flex items-center gap-3">
+                      <div className="w-1 h-3 rounded-full bg-slate-200" />
+                      <p className="text-[12px] font-bold italic text-stone-500">
+                        {profile.motto}
+                      </p>
+                      <div className="w-1 h-3 rounded-full bg-slate-200" />
+                    </div>
+                  ) : theme === 'hipster' ? (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className="w-4 h-[1px] bg-stone-300" />
+                      <p className="text-[11px] font-medium text-stone-500 uppercase tracking-[0.2em] px-4">
+                        {profile.motto}
+                      </p>
+                      <div className="w-4 h-[1px] bg-stone-300" />
+                    </div>
+                  ) : (
+                    <div className="px-4 py-1.5 rounded-full bg-slate-50 border border-slate-100/50 shadow-sm flex items-center justify-center">
+                      <p className="text-[12px] font-bold italic text-slate-500">
+                        {profile.motto}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Completed Trips Section */}
               {publicTrips.length > 0 && (
-                <div className="w-full mt-10 text-left">
+                <div className="w-full mt-4 text-left">
                   <div className="flex items-center gap-2 mb-4 px-2">
                     <Award size={14} style={{ color: brandColor }} />
                     <h4 className={`text-[12px] font-black uppercase tracking-widest ${theme === 'handdrawn' ? 'text-[#4B3F35]' : 'text-slate-800'}`}>
@@ -575,27 +607,27 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({ memberId
                   transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                   className="absolute inset-0 z-50 bg-white flex flex-col"
                 >
-                  <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                  <div className="py-2 px-6 border-b border-slate-100 flex items-center justify-between shrink-0">
                     <button 
                       onClick={() => setSelectedTripSummary(null)}
-                      className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors"
+                      className="p-1.5 -ml-2 text-slate-400 hover:text-slate-600 transition-colors"
                     >
-                      <ChevronLeft size={24} strokeWidth={3} />
+                      <ChevronLeft size={22} strokeWidth={3} />
                     </button>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest truncate max-w-[200px]">
+                    <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest truncate max-w-[200px]">
                       {selectedTripSummary.name}
                     </h3>
-                    <div className="w-10" /> {/* Spacer */}
+                    <div className="w-8" /> {/* Spacer */}
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
+                  <div className="flex-1 overflow-y-auto p-6 pt-0 space-y-6 no-scrollbar">
                     {summaryLoading ? (
                       <div className="h-full flex items-center justify-center">
                         <Loader2 className="animate-spin text-slate-200" size={32} />
                       </div>
                     ) : (
                       <>
-                        <div className="relative h-40 rounded-[32px] overflow-hidden mb-8">
+                        <div className="relative h-40 rounded-[32px] overflow-hidden mb-4 mt-4">
                           <img src={selectedTripSummary.coverImage} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                           <div className="absolute bottom-6 left-6 text-white">
