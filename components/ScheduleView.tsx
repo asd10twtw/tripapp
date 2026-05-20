@@ -59,8 +59,15 @@ const ScheduleEventItem: React.FC<EventItemProps> = ({ event, idx, theme, isRead
         value={event}
         dragListener={false}
         dragControls={controls}
-        onClick={() => !isReadOnly && onEdit(event)}
-        className={`p-5 active:scale-[0.98] transition-all relative group ${isReadOnly ? 'cursor-default pointer-events-auto' : 'cursor-grab active:cursor-grabbing'} ${
+        layout
+        whileDrag={{ 
+          scale: 1.02, 
+          boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.15)",
+          zIndex: 50,
+          cursor: 'grabbing'
+        }}
+        transition={{ type: "spring", damping: 30, stiffness: 400 }}
+        className={`relative group ${isReadOnly ? 'cursor-default pointer-events-auto' : 'cursor-grab'} ${
           theme === 'scrapbook'
             ? 'bg-white border border-stone-200 shadow-sm rotate-[0.5deg] mb-6' 
           : theme === 'hipster'
@@ -70,6 +77,11 @@ const ScheduleEventItem: React.FC<EventItemProps> = ({ event, idx, theme, isRead
             : 'bg-white rounded-2xl border border-slate-50 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-4'
         }`}
     >
+        {/* Clickable Area for Editing (Excludes the bottom-right drag handle) */}
+        <div 
+          onClick={() => !isReadOnly && onEdit(event)}
+          className="p-5"
+        >
                 {(theme === 'scrapbook' || theme === 'hipster') && (
                   <div className="absolute -left-8 top-1/2 -translate-y-1/2 flex flex-col items-center">
                     <div className={`w-3 h-3 rounded-full bg-white border-2 z-10 ${theme === 'hipster' ? 'border-stone-400 scale-90' : ''}`} style={theme === 'handdrawn' || theme === 'scrapbook' ? { borderColor: 'var(--brand-color)' } : {}} />
@@ -78,59 +90,60 @@ const ScheduleEventItem: React.FC<EventItemProps> = ({ event, idx, theme, isRead
                     )}
                   </div>
                 )}
-        {(theme === 'handdrawn' || theme === 'scrapbook') && (
-          <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-3 washi-tape-grid border-x border-black/5 rotate-[-1deg] ${
-            idx % 3 === 0 ? 'bg-amber-200/40' : idx % 3 === 1 ? 'bg-rose-200/40' : 'bg-sky-200/40'
-          }`} />
-        )}
-        <div className="flex justify-between items-center mb-3">
-            <div className="flex items-center gap-2">
-                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold border ${theme === 'hipster' ? 'bg-stone-50 text-stone-400 border-stone-100 font-hipster' : (CATEGORY_COLORS as any)[event.category] || 'bg-slate-50 text-slate-400 border-slate-100'}`}>
-                    <span>{getCategoryIcon(event.category)}</span>
-                    <span className="tracking-normal">{event.category}</span>
+            {(theme === 'handdrawn' || theme === 'scrapbook') && (
+              <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-3 washi-tape-grid border-x border-black/5 rotate-[-1deg] ${
+                idx % 3 === 0 ? 'bg-amber-200/40' : idx % 3 === 1 ? 'bg-rose-200/40' : 'bg-sky-200/40'
+              }`} />
+            )}
+            <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold border ${theme === 'hipster' ? 'bg-stone-50 text-stone-400 border-stone-100 font-hipster' : (CATEGORY_COLORS as any)[event.category] || 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                        <span>{getCategoryIcon(event.category)}</span>
+                        <span className="tracking-normal">{event.category}</span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {event.time && (
+                    <div className={`flex items-center gap-1 text-[11px] font-bold mr-1 ${theme === 'hipster' ? 'text-stone-300 font-hipster' : 'text-slate-400'}`}>
+                      <Clock size={12} className="opacity-60" style={{ color: theme === 'hipster' ? undefined : 'var(--brand-color)' }} /> {event.time}
+                    </div>
+                  )}
+                  {!isReadOnly && (
+                    <div 
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        controls.start(e);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-1.5 text-slate-300 hover:text-slate-400 cursor-grab active:cursor-grabbing transition-colors touch-none flex items-center justify-center"
+                    >
+                      <GripVertical size={14} />
+                    </div>
+                  )}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); !isReadOnly && onDelete(event.id); }}
+                    className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-100'} hover:text-rose-400 transition-colors p-1.5 ${isReadOnly ? 'hidden' : ''}`}
+                  >
+                      <Trash2 size={14} />
+                  </button>
                 </div>
             </div>
-            <div className="flex items-center gap-3">
-              {event.time && (
-                <div className={`flex items-center gap-1 text-[11px] font-bold ${theme === 'hipster' ? 'text-stone-300 font-hipster' : 'text-slate-400'}`}>
-                  <Clock size={12} className="opacity-60" style={{ color: theme === 'hipster' ? undefined : 'var(--brand-color)' }} /> {event.time}
-                </div>
+            <h3 className={`text-[14px] font-bold leading-tight tracking-normal ${theme === 'hipster' ? 'text-stone-600 font-hipster' : 'text-slate-800'}`}>
+              {event.location}
+              {event.coordinates && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMapView();
+                  }}
+                  className="inline-flex ml-1 p-1 text-sky-500 hover:bg-sky-50 rounded-md transition-colors"
+                >
+                  <MapPin size={12} />
+                </button>
               )}
-              <button 
-                onClick={(e) => { e.stopPropagation(); !isReadOnly && onDelete(event.id); }}
-                className={`${theme === 'handdrawn' ? 'text-stone-300' : 'text-slate-100'} hover:text-rose-400 transition-colors p-1 ${isReadOnly ? 'hidden' : ''}`}
-              >
-                  <Trash2 size={14} />
-              </button>
-            </div>
+            </h3>
+            {event.notes && <p className={`text-xs font-medium mt-1 italic ${theme === 'hipster' ? 'text-stone-400 font-hipster' : 'text-slate-400'}`}>{event.notes}</p>}
         </div>
-        <h3 className={`text-[14px] font-bold leading-tight tracking-normal ${theme === 'hipster' ? 'text-stone-600 font-hipster' : 'text-slate-800'}`}>
-          {event.location}
-          {event.coordinates && (
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                onMapView();
-              }}
-              className="inline-flex ml-1 p-1 text-sky-500 hover:bg-sky-50 rounded-md transition-colors"
-            >
-              <MapPin size={12} />
-            </button>
-          )}
-        </h3>
-        {event.notes && <p className={`text-xs font-medium mt-1 italic ${theme === 'hipster' ? 'text-stone-400 font-hipster' : 'text-slate-400'}`}>{event.notes}</p>}
-
-        {!isReadOnly && (
-          <div 
-            onPointerDown={(e) => {
-              e.preventDefault();
-              controls.start(e);
-            }}
-            className="absolute bottom-3 right-3 p-2 text-slate-200 hover:text-slate-400 cursor-grab active:cursor-grabbing transition-colors touch-none z-[20]"
-          >
-            <GripVertical size={16} />
-          </div>
-        )}
     </Reorder.Item>
   );
 };
@@ -491,21 +504,29 @@ export const ScheduleView: React.FC<ScheduleViewProps> = React.memo(({ members, 
       });
   }, [events, selectedDate]);
 
-  const handleReorder = async (newOrder: ScheduleEvent[]) => {
-    // 優化使用者體驗：先更新本地預覽狀態
+  const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleReorder = (newOrder: ScheduleEvent[]) => {
+    if (isReadOnly) return;
+    
+    // 立即更新本地預覽狀態，讓拖曳手感流暢
     const otherEvents = events.filter(e => e.date !== selectedDate);
     const updatedSortedEvents = newOrder.map((e, index) => ({ ...e, sortOrder: index }));
     setEvents([...otherEvents, ...updatedSortedEvents]);
 
-    // 同步到資料庫
-    try {
-      const promises = newOrder.map((item, index) => 
-        updateDoc(doc(db, 'trips', tripId, 'events', item.id), { sortOrder: index })
-      );
-      await Promise.all(promises);
-    } catch (err) {
-      console.error("Reorder sync failed:", err);
-    }
+    // 使用防抖 (Debounce) 機制同步到資料庫
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    
+    syncTimerRef.current = setTimeout(async () => {
+      try {
+        const promises = newOrder.map((item, index) => 
+          updateDoc(doc(db, 'trips', tripId, 'events', item.id), { sortOrder: index })
+        );
+        await Promise.all(promises);
+      } catch (err) {
+        console.error("Reorder sync failed:", err);
+      }
+    }, 500); // 停止移動後 500ms 才寫入資料庫
   };
 
   return (
