@@ -18,30 +18,30 @@ interface ScheduleViewProps {
   isReadOnly?: boolean;
 }
 
-export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, startDate, endDate, theme, isReadOnly }) => {
-  const generateDates = () => {
-    const start = new Date(startDate + 'T00:00:00');
-    const end = new Date(endDate + 'T00:00:00');
-    const dateList = [{ display: 'PRE', val: 'PRE_TRIP', icon: '📝', date: '' }];
+const generateDatesList = (startDate: string, endDate: string) => {
+  const start = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  const dateList = [{ display: 'PRE', val: 'PRE_TRIP', icon: '📝', date: '' }];
+  
+  let current = new Date(start);
+  let dayCount = 1;
+  while (current <= end) {
+    const year = current.getFullYear();
+    const month = (current.getMonth() + 1).toString().padStart(2, '0');
+    const day = current.getDate().toString().padStart(2, '0');
+    const val = `${year}-${month}-${day}`;
     
-    let current = new Date(start);
-    let dayCount = 1;
-    while (current <= end) {
-      const year = current.getFullYear();
-      const month = (current.getMonth() + 1).toString().padStart(2, '0');
-      const day = current.getDate().toString().padStart(2, '0');
-      const val = `${year}-${month}-${day}`;
-      
-      const display = dayCount.toString();
-      const dateStr = `${current.getMonth() + 1}/${day}`;
-      dateList.push({ display, val, date: dateStr } as any);
-      current.setDate(current.getDate() + 1);
-      dayCount++;
-    }
-    return dateList;
-  };
+    const display = dayCount.toString();
+    const dateStr = `${current.getMonth() + 1}/${day}`;
+    dateList.push({ display, val, date: dateStr } as any);
+    current.setDate(current.getDate() + 1);
+    dayCount++;
+  }
+  return dateList;
+};
 
-  const dates = generateDates();
+export const ScheduleView: React.FC<ScheduleViewProps> = React.memo(({ members, tripId, startDate, endDate, theme, isReadOnly }) => {
+  const dates = useMemo(() => generateDatesList(startDate, endDate), [startDate, endDate]);
 
   // 初始化日期邏輯：如果是旅程開始前顯示行前準備，旅程期間顯示當天，否則顯示第一天
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -89,7 +89,6 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
 
   // Swipe gesture state
   const [touchStart, setTouchStart] = useState<{x: number, y: number} | null>(null);
-  const [touchEnd, setTouchEnd] = useState<{x: number, y: number} | null>(null);
   const minSwipeDistance = 50;
 
   // Auto-scroll date tab
@@ -107,18 +106,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
   }, [selectedDate]);
 
   const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
     setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
   };
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const xDistance = touchStart.x - touchEnd.x;
-    const yDistance = touchStart.y - touchEnd.y;
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+    
+    const touchEndClientX = e.changedTouches[0].clientX;
+    const touchEndClientY = e.changedTouches[0].clientY;
+    
+    const xDistance = touchStart.x - touchEndClientX;
+    const yDistance = touchStart.y - touchEndClientY;
 
     // Ignore vertical scrolls
     if (Math.abs(yDistance) >= Math.abs(xDistance)) return;
@@ -456,7 +454,6 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
       <div 
         className="flex-1 min-h-0 overflow-y-auto px-8 pb-32 no-scrollbar pt-0"
         onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
         {selectedDate === 'PRE_TRIP' ? (
@@ -1040,4 +1037,4 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ members, tripId, sta
       )}
     </div>
   );
-};
+});
