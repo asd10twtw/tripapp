@@ -85,14 +85,6 @@ const ScheduleEventItem: React.FC<EventItemProps> = ({ event, idx, theme, isRead
         )}
         <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
-                {!isReadOnly && (
-                    <div 
-                        onPointerDown={(e) => controls.start(e)}
-                        className="p-1 -ml-1 text-slate-300 hover:text-slate-400 cursor-grab active:cursor-grabbing transition-colors"
-                    >
-                        <GripVertical size={16} />
-                    </div>
-                )}
                 <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold border ${theme === 'hipster' ? 'bg-stone-50 text-stone-400 border-stone-100 font-hipster' : (CATEGORY_COLORS as any)[event.category] || 'bg-slate-50 text-slate-400 border-slate-100'}`}>
                     <span>{getCategoryIcon(event.category)}</span>
                     <span className="tracking-normal">{event.category}</span>
@@ -127,6 +119,18 @@ const ScheduleEventItem: React.FC<EventItemProps> = ({ event, idx, theme, isRead
           )}
         </h3>
         {event.notes && <p className={`text-xs font-medium mt-1 italic ${theme === 'hipster' ? 'text-stone-400 font-hipster' : 'text-slate-400'}`}>{event.notes}</p>}
+
+        {!isReadOnly && (
+          <div 
+            onPointerDown={(e) => {
+              e.preventDefault();
+              controls.start(e);
+            }}
+            className="absolute bottom-3 right-3 p-2 text-slate-200 hover:text-slate-400 cursor-grab active:cursor-grabbing transition-colors touch-none z-[20]"
+          >
+            <GripVertical size={16} />
+          </div>
+        )}
     </Reorder.Item>
   );
 };
