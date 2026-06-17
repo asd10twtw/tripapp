@@ -12,6 +12,7 @@ export interface Trip {
   country?: string;
   inviteCode?: string;
   isPublic?: boolean;
+  defaultCurrency?: string;
 }
 
 export interface UserProfile {
@@ -83,10 +84,9 @@ export interface PreTripTask {
 
 export interface Expense {
   id: string;
-  amountKRW: number;
+  amount: number;
   amountTWD: number;
-  amountJPY?: number;
-  currency: 'KRW' | 'TWD' | 'JPY'; // Track original input currency
+  currency: string;
   category: string;
   description: string;
   payerId: string;
@@ -96,6 +96,10 @@ export interface Expense {
   notes?: string;
   customSplits?: Record<string, number>;
   timestamp?: string;
+  updatedAt?: string;
+  // Legacy fields for backward compatibility
+  amountKRW?: number;
+  amountJPY?: number;
 }
 
 export interface JournalEntry {

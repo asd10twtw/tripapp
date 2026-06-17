@@ -14,16 +14,35 @@ interface ExpenseViewProps {
   currentUser: UserProfile;
   theme?: string;
   isReadOnly?: boolean;
+  defaultCurrency?: string;
 }
 
-export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, currentUser, theme, isReadOnly }) => {
+const DEFAULT_RATES: Record<string, number> = {
+  'KRW': 0.0245,
+  'JPY': 0.21,
+  'USD': 32.5,
+  'EUR': 35.0,
+  'THB': 0.9,
+  'VND': 0.0013,
+  'HKD': 4.15,
+  'GBP': 41.5,
+  'AUD': 21.5,
+  'SGD': 24.5,
+  'MYR': 7.2,
+  'CNY': 4.5
+};
+
+const CURRENCIES = Object.keys(DEFAULT_RATES);
+
+export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, currentUser, theme, isReadOnly, defaultCurrency = 'KRW' }) => {
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'settle'>('list');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   
-  const [exchangeRate, setExchangeRate] = useState<number>(0.0245);
-  const [localRateStr, setLocalRateStr] = useState<string>('0.0245');
-  const [jpyRate, setJpyRate] = useState<number>(0.21);
-  const [jpyRateStr, setJpyRateStr] = useState<string>('0.21');
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const [settingCurrency, setSettingCurrency] = useState<string>(defaultCurrency);
+  const [localRateStr, setLocalRateStr] = useState<string>(DEFAULT_RATES[defaultCurrency]?.toString() || '1');
+
+  const currentSettingRate = rates[settingCurrency] || DEFAULT_RATES[settingCurrency] || 1;
 
   const [viewingMemberDetailsId, setViewingMemberDetailsId] = useState<string | null>(null);
 
@@ -38,11 +57,12 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [amountInput, setAmountInput] = useState('');
-  const [inputCurrency, setInputCurrency] = useState<'KRW' | 'TWD' | 'JPY'>('KRW');
+  const [inputCurrency, setInputCurrency] = useState<string>(defaultCurrency);
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [category, setCategory] = useState<string>(EventCategory.FOOD);
   const [payer, setPayer] = useState('');
+  const [manuallyEditedIds, setManuallyEditedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (members.length > 0 && !payer) {
@@ -70,21 +90,11 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
     const unsubscribe = onSnapshot(doc(db, 'trips', tripId, 'config', 'settings'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.exchangeRate !== undefined) {
-          setExchangeRate(data.exchangeRate);
-          setLocalRateStr(prev => {
-             const currentNum = parseFloat(prev);
-             if (!isNaN(currentNum) && Math.abs(currentNum - data.exchangeRate) < 0.000001) return prev;
-             return data.exchangeRate.toString();
-          });
-        }
-        if (data.jpyRate !== undefined) {
-          setJpyRate(data.jpyRate);
-          setJpyRateStr(prev => {
-             const currentNum = parseFloat(prev);
-             if (!isNaN(currentNum) && Math.abs(currentNum - data.jpyRate) < 0.000001) return prev;
-             return data.jpyRate.toString();
-          });
+        if (data.rates) {
+          setRates(data.rates);
+        } else if (data.exchangeRate !== undefined) {
+          // Migration from old single field
+          setRates({ 'KRW': data.exchangeRate });
         }
         if (data.customCategories) setCustomCategories(data.customCategories);
       }
@@ -92,23 +102,78 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
     return () => unsubscribe();
   }, [tripId]);
 
+  // Sync local string when global rate or currency changes
+  useEffect(() => {
+    setLocalRateStr(prev => {
+      const currentNum = parseFloat(prev);
+      if (!isNaN(currentNum) && Math.abs(currentNum - currentSettingRate) < 0.000001) return prev;
+      return currentSettingRate.toString();
+    });
+  }, [currentSettingRate, settingCurrency]);
+
   const handleRateChange = async (newVal: string) => {
     setLocalRateStr(newVal);
     const rate = parseFloat(newVal);
     if (!isNaN(rate)) {
-        setExchangeRate(rate);
-        await setDoc(doc(db, 'trips', tripId, 'config', 'settings'), { exchangeRate: rate }, { merge: true });
+        await setDoc(doc(db, 'trips', tripId, 'config', 'settings'), { 
+          rates: { 
+            ...rates, 
+            [settingCurrency]: rate 
+          } 
+        }, { merge: true });
     }
   };
 
-  const handleJpyRateChange = async (newVal: string) => {
-    setJpyRateStr(newVal);
-    const rate = parseFloat(newVal);
-    if (!isNaN(rate)) {
-        setJpyRate(rate);
-        await setDoc(doc(db, 'trips', tripId, 'config', 'settings'), { jpyRate: rate }, { merge: true });
+  const handleCustomSplitEdit = (memberId: string, value: string) => {
+    const totalAmount = parseFloat(amountInput) || 0;
+    const newSplits = { ...customSplits, [memberId]: value };
+    const newManuallyEdited = new Set(manuallyEditedIds);
+    newManuallyEdited.add(memberId);
+    setManuallyEditedIds(newManuallyEdited);
+
+    let manualSum = 0;
+    newManuallyEdited.forEach(id => {
+      manualSum += parseFloat(newSplits[id] || '0');
+    });
+
+    const others = selectedSplits.filter(id => !newManuallyEdited.has(id));
+    if (others.length > 0) {
+      const remaining = Math.max(0, totalAmount - manualSum);
+      const sharePerOther = remaining / others.length;
+      
+      others.forEach(id => {
+        newSplits[id] = sharePerOther > 0 ? (Math.round(sharePerOther * 100) / 100).toString() : '0';
+      });
     }
+
+    setCustomSplits(newSplits);
   };
+
+  useEffect(() => {
+    if (isCustomSplit && amountInput && selectedSplits.length > 0) {
+       const totalAmount = parseFloat(amountInput) || 0;
+       const others = selectedSplits.filter(id => !manuallyEditedIds.has(id));
+       if (others.length > 0) {
+         let manualSum = 0;
+         manuallyEditedIds.forEach(id => {
+           manualSum += parseFloat(customSplits[id] || '0');
+         });
+         const remaining = Math.max(0, totalAmount - manualSum);
+         const sharePerOther = remaining / others.length;
+         
+         const newSplits = { ...customSplits };
+         let changed = false;
+         others.forEach(id => {
+           const newShare = sharePerOther > 0 ? (Math.round(sharePerOther * 100) / 100).toString() : '0';
+           if (newSplits[id] !== newShare) {
+             newSplits[id] = newShare;
+             changed = true;
+           }
+         });
+         if (changed) setCustomSplits(newSplits);
+       }
+    }
+  }, [amountInput, isCustomSplit, selectedSplits.length, manuallyEditedIds]);
 
   // 新增分類的處理函式
   const handleAddNewCategory = async (e: React.MouseEvent) => {
@@ -138,6 +203,21 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
       const fetched = snapshot.docs.map(doc => {
         const data = doc.data() as any;
         
+        // Handle legacy data structure
+        if (data.amount === undefined) {
+          if (data.amountKRW !== undefined) {
+            data.amount = data.amountKRW;
+            data.currency = data.currency || 'KRW';
+          } else if (data.amountJPY !== undefined) {
+            data.amount = data.amountJPY;
+            data.currency = data.currency || 'JPY';
+          } else {
+            data.amount = data.amountTWD || 0;
+            data.currency = data.currency || 'TWD';
+          }
+        }
+        if (!data.currency) data.currency = 'KRW'; // Fallback
+
         // Dynamic Legacy ID Mapping
         members.forEach(m => {
           if (m.legacyIds && m.legacyIds.length > 0) {
@@ -167,68 +247,85 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
 
   const allCategories = { ...CATEGORY_ICONS, ...customCategories };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleSave = async () => {
-    const inputTotal = parseFloat(amountInput);
-    if (!amountInput || isNaN(inputTotal) || !description.trim()) { alert("請輸入金額與描述！"); return; }
-    if (selectedSplits.length === 0) { alert("請選擇分帳人！"); return; }
+    if (isSaving) return;
     
-    let finalCustomSplits: Record<string, number> | null = null;
-    if (isCustomSplit) {
-      let sum = 0;
-      finalCustomSplits = {};
-      for (const id of selectedSplits) {
-        const val = parseFloat(customSplits[id] || '0');
-        finalCustomSplits[id] = val;
-        sum += val;
+    const inputTotal = parseFloat(amountInput || '0');
+    if (!amountInput || isNaN(inputTotal) || !description.trim()) { 
+      alert("請輸入金額與描述！"); 
+      return; 
+    }
+    if (selectedSplits.length === 0) { 
+      alert("請選擇分帳人！"); 
+      return; 
+    }
+
+    setIsSaving(true);
+    try {
+      let finalCustomSplits: Record<string, number> | null = null;
+      if (isCustomSplit) {
+        let sum = 0;
+        finalCustomSplits = {};
+        for (const id of selectedSplits) {
+          const val = parseFloat(customSplits[id] || '0');
+          finalCustomSplits[id] = val;
+          sum += val;
+        }
+        // Allow tiny rounding difference (0.5)
+        if (Math.abs(sum - inputTotal) > 0.5) {
+          alert(`自定義金額總和 (${sum.toFixed(2)}) 不等於總額 (${inputTotal})！\n差異: ${(sum - inputTotal).toFixed(2)}`);
+          setIsSaving(false);
+          return;
+        }
       }
-      if (Math.abs(sum - inputTotal) > 0.1) {
-        alert(`自定義金額總和 (${sum}) 不等於總額 (${inputTotal})！`);
-        return;
+
+      let amount = inputTotal;
+      let amountTWD = 0;
+      const rateToUse = rates[inputCurrency] || DEFAULT_RATES[inputCurrency] || 1;
+
+      if (inputCurrency === 'TWD') {
+          amountTWD = Math.round(inputTotal);
+      } else {
+          amountTWD = Math.round(inputTotal * rateToUse);
       }
+      
+      const now = new Date().toISOString();
+      const data: any = { 
+        amount, 
+        amountTWD, 
+        currency: inputCurrency, 
+        category, 
+        description: description.trim(), 
+        notes: (notes || '').trim(),
+        payerId: payer || (members[0]?.id), 
+        splitWithIds: selectedSplits, 
+        date: newDate, 
+        time: newTime || '00:00', 
+        updatedAt: now,
+        timestamp: now 
+      };
+
+      if (finalCustomSplits !== null) {
+        data.customSplits = finalCustomSplits;
+      } else if (editingId) {
+        data.customSplits = null;
+      }
+
+      if (editingId) {
+        await updateDoc(doc(db, 'trips', tripId, 'expenses', editingId), data);
+      } else {
+        await addDoc(collection(db, 'trips', tripId, 'expenses'), data);
+      }
+      
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error("Save expense failed:", error);
+      alert(`儲存失敗: ${error.message || '未知錯誤'}`);
+    } finally {
+      setIsSaving(false);
     }
-
-    let amountKRW = 0, amountTWD = 0, amountJPY = 0;
-    const safeRate = exchangeRate || 0.0245;
-    const safeJpyRate = jpyRate || 0.21;
-
-    if (inputCurrency === 'KRW') {
-        amountKRW = Math.round(inputTotal);
-        amountTWD = Math.round(inputTotal * safeRate);
-        amountJPY = Math.round(amountTWD / safeJpyRate);
-    } else if (inputCurrency === 'JPY') {
-        amountJPY = Math.round(inputTotal);
-        amountTWD = Math.round(inputTotal * safeJpyRate);
-        amountKRW = Math.round(amountTWD / safeRate);
-    } else {
-        amountTWD = Math.round(inputTotal);
-        amountKRW = Math.round(inputTotal / safeRate);
-        amountJPY = Math.round(inputTotal / safeJpyRate);
-    }
-    
-    const data: any = { 
-      amountKRW, 
-      amountTWD, 
-      amountJPY,
-      currency: inputCurrency, 
-      category, 
-      description: description.trim(), 
-      notes: notes.trim(),
-      payerId: payer, 
-      splitWithIds: selectedSplits, 
-      date: newDate, 
-      time: newTime || '00:00', 
-      timestamp: new Date().toISOString() 
-    };
-
-    if (finalCustomSplits !== null) {
-      data.customSplits = finalCustomSplits;
-    } else if (editingId) {
-      data.customSplits = null;
-    }
-
-    if (editingId) await updateDoc(doc(db, 'trips', tripId, 'expenses', editingId), data);
-    else await addDoc(collection(db, 'trips', tripId, 'expenses'), data);
-    setIsModalOpen(false);
   };
 
   const handleDeleteExpense = async (id?: string) => {
@@ -256,10 +353,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
     members.forEach(m => { memberPaid[m.id] = 0; memberShare[m.id] = 0; });
     
     expenses.forEach(exp => {
-        let currentTWD = 0;
-        if (exp.currency === 'KRW') currentTWD = Math.round(exp.amountKRW * exchangeRate);
-        else if (exp.currency === 'JPY') currentTWD = Math.round((exp.amountJPY || 0) * jpyRate);
-        else currentTWD = exp.amountTWD;
+        let currentTWD = exp.amountTWD;
 
         if (memberPaid[exp.payerId] !== undefined) {
            memberPaid[exp.payerId] += currentTWD;
@@ -269,9 +363,8 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
           (Object.entries(exp.customSplits) as [string, number][]).forEach(([id, amt]) => {
             if (memberShare[id] !== undefined) {
               let shareTWD = 0;
-              if (exp.currency === 'KRW') shareTWD = amt * exchangeRate;
-              else if (exp.currency === 'JPY') shareTWD = amt * jpyRate;
-              else shareTWD = amt;
+              if (exp.currency === 'TWD') shareTWD = amt;
+              else shareTWD = amt * (exp.amountTWD / (exp.amount || 1)); // Use implied rate from the record
               memberShare[id] += shareTWD;
             }
           });
@@ -315,15 +408,12 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
       const splitIds = exp.splitWithIds || [];
       if (splitIds.includes(currentUser.uid)) {
         let myShare = 0;
-        let currentTWD = 0;
-        if (exp.currency === 'KRW') currentTWD = Math.round(exp.amountKRW * exchangeRate);
-        else if (exp.currency === 'JPY') currentTWD = Math.round((exp.amountJPY || 0) * jpyRate);
-        else currentTWD = exp.amountTWD;
+        let currentTWD = exp.amountTWD;
         
         if (exp.customSplits && exp.customSplits[currentUser.uid] !== undefined) {
-          if (exp.currency === 'KRW') myShare = exp.customSplits[currentUser.uid] * exchangeRate;
-          else if (exp.currency === 'JPY') myShare = exp.customSplits[currentUser.uid] * jpyRate;
-          else myShare = exp.customSplits[currentUser.uid];
+          const myRawShare = exp.customSplits[currentUser.uid];
+          if (exp.currency === 'TWD') myShare = myRawShare;
+          else myShare = myRawShare * (exp.amountTWD / (exp.amount || 1));
         } else {
           myShare = splitIds.length > 0 ? currentTWD / splitIds.length : 0;
         }
@@ -353,9 +443,10 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
   const sortedMemberDates = Object.keys(groupedMemberExpenses).sort((a, b) => b.localeCompare(a));
 
   const openAddModal = () => {
-    setEditingId(null); setAmountInput(''); setInputCurrency('KRW'); setDescription(''); setNotes(''); setCategory(EventCategory.FOOD);
+    setEditingId(null); setAmountInput(''); setInputCurrency(defaultCurrency); setDescription(''); setNotes(''); setCategory(EventCategory.FOOD);
     setNewDate(new Date().toISOString().split('T')[0]); setNewTime(getCurrentTime()); setIsAddingCategory(false);
     setIsCustomSplit(false); setCustomSplits({});
+    setManuallyEditedIds(new Set());
     if (members.length > 0) { 
       const me = members.find(m => m.id === currentUser.uid);
       setPayer(me ? me.id : members[0].id); 
@@ -365,11 +456,12 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
   };
 
   const openEditModal = (exp: Expense) => {
-    setEditingId(exp.id); setInputCurrency(exp.currency || 'KRW');
-    setAmountInput(exp.currency === 'KRW' ? exp.amountKRW.toString() : exp.amountTWD.toString());
+    setEditingId(exp.id); setInputCurrency(exp.currency || defaultCurrency);
+    setAmountInput(exp.amount ? exp.amount.toString() : (exp.currency === 'TWD' ? exp.amountTWD.toString() : (exp.amountKRW || exp.amountJPY || 0).toString()));
     setDescription(exp.description); setNotes(exp.notes || ''); setCategory(exp.category); setPayer(exp.payerId);
     setSelectedSplits(exp.splitWithIds || []); setNewDate(exp.date); setNewTime(exp.time || '00:00');
     setIsAddingCategory(false);
+    setManuallyEditedIds(new Set());
     if (exp.customSplits) {
       setIsCustomSplit(true);
       const stringifiedSplits: Record<string, string> = {};
@@ -417,30 +509,22 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeSubTab}
-            initial={{ opacity: 0, x: activeSubTab === 'list' ? -50 : 50 }}
+            initial={{ opacity: 0, x: activeSubTab === 'list' ? -20 : 20 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: activeSubTab === 'list' ? 50 : -50 }}
+            exit={{ opacity: 0, x: activeSubTab === 'list' ? 20 : -20 }}
             transition={{ type: "spring", stiffness: 300, damping: 30, opacity: { duration: 0.2 } }}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.15}
-            onDragEnd={(e, info) => {
-              const threshold = 100;
-              if (info.offset.x > threshold && activeSubTab === 'settle') {
-                setActiveSubTab('list');
-              } else if (info.offset.x < -threshold && activeSubTab === 'list') {
-                setActiveSubTab('settle');
-              }
-            }}
             className="absolute inset-0 overflow-y-auto no-scrollbar px-6 pb-24 pt-4"
           >
             {activeSubTab === 'list' ? (
               <div className="space-y-6">
-            <div className="flex justify-between items-center px-1 relative">
+            <div className="flex justify-between items-end px-2 mb-2 relative">
                {theme === 'scrapbook' && (
                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-24 h-6 washi-tape-grid bg-amber-100/40 border-x border-amber-200/10 rotate-[-1deg] z-0" />
                )}
-               <h3 className={`text-xs font-black uppercase tracking-widest relative z-10 ${theme === 'scrapbook' ? 'text-stone-300' : 'text-slate-300'}`}>TIMELINE</h3>
+               <div className="flex flex-col">
+                  <h3 className={`text-[10px] font-black uppercase tracking-[0.2em] relative z-10 ${theme === 'scrapbook' ? 'text-stone-300' : 'text-slate-300'}`}>TIMELINE</h3>
+                  <div className={`h-0.5 w-8 rounded-full mt-1 ${theme === 'scrapbook' ? 'bg-stone-200/50' : 'bg-slate-200/50'}`}></div>
+               </div>
                {!isReadOnly && (
                  <button 
                   onClick={openAddModal} 
@@ -459,10 +543,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                     <div className="space-y-3">
                     {expensesByDate[date].map((exp, idx) => {
                       const payerM = members.find(m => m.id === exp.payerId);
-                      let currentTWD = 0;
-                      if (exp.currency === 'KRW') currentTWD = Math.round(exp.amountKRW * exchangeRate);
-                      else if (exp.currency === 'JPY') currentTWD = Math.round((exp.amountJPY || 0) * jpyRate);
-                      else currentTWD = exp.amountTWD;
+                      let currentTWD = exp.amountTWD;
 
                       const splitMembers = members.filter(m => (exp.splitWithIds || []).includes(m.id));
                       return (
@@ -497,7 +578,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                                   </div>
                                   <div className={`text-sm font-black tracking-tight leading-none mb-1 ${theme === 'scrapbook' ? 'text-stone-800' : 'text-slate-900'}`}>NT$ {currentTWD.toLocaleString()}</div>
                                   <div className={`text-[10px] font-black uppercase tracking-tighter leading-none ${theme === 'scrapbook' ? 'text-stone-400' : ''}`} style={theme !== 'scrapbook' ? { color: 'var(--brand-color)' } : {}}>
-                                    {exp.currency === 'KRW' ? `₩${exp.amountKRW.toLocaleString()}` : exp.currency === 'JPY' ? `¥${exp.amountJPY?.toLocaleString()}` : `NT$ ${exp.amountTWD.toLocaleString()}`}
+                                    {exp.currency === 'TWD' ? `NT$ ${exp.amount.toLocaleString()}` : `${exp.currency} ${exp.amount?.toLocaleString()}`}
                                   </div>
                               </div>
                           </div>
@@ -525,7 +606,16 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
               <div className="space-y-8">
             <div className="bg-sky-50 rounded-2xl p-5 border border-sky-100 shadow-soft space-y-4">
                 <div className="flex justify-between items-center gap-2">
-                   <h4 className="text-sky-500 text-[10px] font-black tracking-tight uppercase shrink-0">匯率設定</h4>
+                   <div className="flex items-center gap-2">
+                      <h4 className="text-sky-500 text-[10px] font-black tracking-tight uppercase shrink-0">匯率設定</h4>
+                      <select 
+                        value={settingCurrency} 
+                        onChange={(e) => setSettingCurrency(e.target.value)}
+                        className="bg-sky-100/50 text-[10px] font-black p-1 rounded border border-sky-200 outline-none text-sky-600"
+                      >
+                        {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                   </div>
                    <a 
                     href="https://rate.bot.com.tw/xrt?Lang=zh-TW" 
                     target="_blank" 
@@ -536,23 +626,15 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                    </a>
                 </div>
                 
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-16 text-right">1 KRW ≈</div>
-                    <div className="flex-1 min-w-0 bg-white border border-sky-400/20 rounded-xl px-2 h-10 flex items-center shadow-sm">
-                        <input type="number" step="0.0001" value={localRateStr} onChange={(e) => !isReadOnly && handleRateChange(e.target.value)} disabled={isReadOnly} className="w-full text-center text-sm font-black bg-transparent outline-none disabled:opacity-50" style={{ color: 'var(--brand-color)' }} />
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-16 text-right">1 {settingCurrency} ≈</div>
+                        <div className="flex-1 min-w-0 bg-white border border-sky-400/20 rounded-xl px-2 h-10 flex items-center shadow-sm">
+                            <input type="number" step="0.0001" value={localRateStr} onChange={(e) => !isReadOnly && handleRateChange(e.target.value)} disabled={isReadOnly} className="w-full text-center text-sm font-black bg-transparent outline-none disabled:opacity-50" style={{ color: 'var(--brand-color)' }} />
+                        </div>
+                        <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-8">TWD</div>
+                      </div>
                     </div>
-                    <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-8">TWD</div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-16 text-right">1 JPY ≈</div>
-                    <div className="flex-1 min-w-0 bg-white border border-sky-400/20 rounded-xl px-2 h-10 flex items-center shadow-sm">
-                        <input type="number" step="0.0001" value={jpyRateStr} onChange={(e) => !isReadOnly && handleJpyRateChange(e.target.value)} disabled={isReadOnly} className="w-full text-center text-sm font-black bg-transparent outline-none disabled:opacity-50" style={{ color: 'var(--brand-color)' }} />
-                    </div>
-                    <div className="text-slate-600 text-[10px] font-black leading-none uppercase shrink-0 w-8">TWD</div>
-                  </div>
-                </div>
             </div>
 
             <div className="space-y-3">
@@ -704,11 +786,11 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                          <div className="text-[10px] font-black flex items-center gap-1.5 px-1 uppercase tracking-widest border-l-4 ml-1" style={{ color: 'var(--brand-color)', borderColor: 'rgba(var(--brand-color-rgb), 0.3)' }}>{date}</div>
                          <div className="space-y-2.5">
                             {groupedMemberExpenses[date].map(exp => {
-                              const currentTWD = exp.currency === 'KRW' ? Math.round(exp.amountKRW * exchangeRate) : exp.amountTWD;
+                              const currentTWD = exp.amountTWD;
                               const splitIds = exp.splitWithIds || [];
                               let individualShareTWD = 0;
                               if (exp.customSplits && exp.customSplits[viewingMember.id] !== undefined) {
-                                individualShareTWD = exp.currency === 'KRW' ? Math.round(exp.customSplits[viewingMember.id] * exchangeRate) : Math.round(exp.customSplits[viewingMember.id]);
+                                individualShareTWD = Math.round(exp.customSplits[viewingMember.id] * (exp.amountTWD / (exp.amount || 1)));
                               } else {
                                 individualShareTWD = splitIds.length > 0 ? Math.round(currentTWD / splitIds.length) : 0;
                               }
@@ -726,7 +808,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                                     </div>
                                     <div className="text-right shrink-0">
                                       <div className="text-sm font-black" style={{ color: 'var(--brand-color)' }}>NT$ {individualShareTWD.toLocaleString()}</div>
-                                      <div className="text-[9px] font-bold text-slate-300">總計 ₩{exp.amountKRW.toLocaleString()}</div>
+                                      <div className="text-[9px] font-bold text-slate-300">總計 {exp.currency} {exp.amount.toLocaleString()}</div>
                                     </div>
                                   </div>
                                   {exp.notes && (
@@ -754,10 +836,22 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                 <div className="space-y-4">
                     <div className="flex gap-3 items-end bg-slate-50 p-4 rounded-2xl border border-slate-100">
                         <div className="flex-1 min-w-0"><label className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mb-1 block px-1">金額</label><input type="number" value={amountInput} onChange={(e) => setAmountInput(e.target.value)} className="w-full text-2xl font-bold text-slate-800 bg-transparent outline-none" placeholder="0" /></div>
-                        <div className="flex bg-white rounded-xl p-1 shadow-xs border border-slate-100 shrink-0">
-                             <button onClick={() => setInputCurrency('KRW')} className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${inputCurrency === 'KRW' ? 'bg-sky-400 text-white' : 'text-slate-400'}`}>KRW</button>
-                             <button onClick={() => setInputCurrency('JPY')} className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${inputCurrency === 'JPY' ? 'bg-sky-400 text-white' : 'text-slate-400'}`}>JPY</button>
+                        <div className="flex bg-white rounded-xl p-1 shadow-xs border border-slate-100 shrink-0 gap-1">
+                             <button onClick={() => setInputCurrency(defaultCurrency)} className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${inputCurrency === defaultCurrency ? 'bg-sky-400 text-white' : 'text-slate-400'}`}>{defaultCurrency}</button>
                              <button onClick={() => setInputCurrency('TWD')} className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${inputCurrency === 'TWD' ? 'bg-sky-400 text-white' : 'text-slate-400'}`}>TWD</button>
+                             <div className="relative">
+                                <select 
+                                  value={CURRENCIES.includes(inputCurrency) && inputCurrency !== defaultCurrency && inputCurrency !== 'TWD' ? inputCurrency : ''} 
+                                  onChange={(e) => e.target.value && setInputCurrency(e.target.value)}
+                                  className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all appearance-none outline-none border-none pr-4 ${CURRENCIES.includes(inputCurrency) && inputCurrency !== defaultCurrency && inputCurrency !== 'TWD' ? 'bg-sky-400 text-white' : 'text-slate-400 bg-slate-50'}`}
+                                >
+                                  <option value="">其他</option>
+                                  {CURRENCIES.filter(c => c !== defaultCurrency && c !== 'TWD').map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                  ))}
+                                </select>
+                                <ChevronDown size={8} className={`absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none ${CURRENCIES.includes(inputCurrency) && inputCurrency !== defaultCurrency && inputCurrency !== 'TWD' ? 'text-white' : 'text-slate-400'}`} />
+                             </div>
                         </div>
                     </div>
                     
@@ -807,7 +901,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                     <div>
                         <div className="flex justify-between items-center mb-2 px-1">
                             <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest">分帳人與金額</label>
-                            <button type="button" onClick={() => setIsCustomSplit(!isCustomSplit)} className={`text-[9px] font-black px-2 py-0.5 rounded-full border transition-all ${isCustomSplit ? 'bg-amber-400 text-white border-amber-500' : 'text-slate-400 border-slate-200'}`}>
+                            <button type="button" onClick={() => { setIsCustomSplit(!isCustomSplit); setManuallyEditedIds(new Set()); }} className={`text-[9px] font-black px-2 py-0.5 rounded-full border transition-all ${isCustomSplit ? 'bg-amber-400 text-white border-amber-500' : 'text-slate-400 border-slate-200'}`}>
                                 {isCustomSplit ? '自定義金額' : '平均分帳'}
                             </button>
                         </div>
@@ -833,7 +927,7 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                                                 <input 
                                                     type="number" 
                                                     value={customSplits[m.id] || ''} 
-                                                    onChange={(e) => setCustomSplits({...customSplits, [m.id]: e.target.value})}
+                                                    onChange={(e) => handleCustomSplitEdit(m.id, e.target.value)}
                                                     className="w-20 text-right text-xs font-black text-slate-700 bg-transparent outline-none" 
                                                     placeholder="0"
                                                 />
@@ -853,7 +947,16 @@ export const ExpenseView: React.FC<ExpenseViewProps> = ({ members, tripId, curre
                 
                 <div className="flex gap-3 mt-8">
                     {editingId && <button onClick={() => handleDeleteExpense()} className={`p-4 font-bold active:scale-90 transition-all ${theme === 'handdrawn' ? 'text-stone-300' : 'bg-rose-50 text-rose-500 rounded-2xl'}`}><Trash2 size={20} /></button>}
-                    <button onClick={handleSave} className="flex-1 py-4 text-white text-base font-bold rounded-2xl shadow-active active:scale-95 transition-all" style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}>{editingId ? '儲存變更' : '確定新增'}</button>
+                    <button 
+                      type="button"
+                      onClick={handleSave} 
+                      disabled={isSaving}
+                      className={`flex-1 py-4 text-white text-base font-bold rounded-2xl shadow-active active:scale-95 transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`} 
+                      style={{ backgroundColor: 'var(--brand-color)', color: 'var(--brand-text)' }}
+                    >
+                      {isSaving && <Clock size={18} className="animate-spin" />}
+                      {editingId ? '儲存變更' : '確定新增'}
+                    </button>
                 </div>
             </div>
         </div>

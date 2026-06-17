@@ -53,6 +53,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, trips, onSelectTrip,
         memberUids: [user.uid],
         ownerUid: user.uid,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        defaultCurrency: 'KRW',
         inviteCode
       };
       const tripRef = await addDoc(collection(db, 'trips'), tripData);

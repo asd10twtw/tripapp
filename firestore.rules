@@ -76,6 +76,7 @@ service cloud.firestore {
              (!('endDate' in data) || (data.endDate is string)) &&
              (!('inviteCode' in data) || (data.inviteCode is string)) &&
              (!('isPublic' in data) || (data.isPublic is bool)) &&
+             (!('defaultCurrency' in data) || (data.defaultCurrency is string)) &&
              (!('coverImage' in data) || (data.coverImage is string && data.coverImage.size() <= 2000000)) &&
              (!('memberUids' in data) || (data.memberUids is list && data.memberUids.size() <= 200)) &&
              (!('ownerUid' in data) || (data.ownerUid is string)) &&
@@ -129,13 +130,13 @@ service cloud.firestore {
 
     // [Trips & Subcollections]
     match /trips/{tripId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       
       allow create: if isSignedIn() && 
                     isValidTrip(incoming(), true) &&
                     incoming().ownerUid == request.auth.uid &&
                     request.auth.uid in incoming().memberUids &&
-                    incoming().createdAt == request.time;
+                    (incoming().createdAt == request.time || incoming().createdAt is string);
       
       allow update: if isSignedIn() && (
         // Action: Owner/Member/Admin Update
@@ -143,7 +144,7 @@ service cloud.firestore {
           isValidTrip(incoming(), false) &&
           incoming().diff(existing()).affectedKeys().hasOnly([
             'name', 'subtitle', 'city', 'country', 'startDate', 'endDate', 
-            'coverImage', 'memberUids', 'inviteCode', 'updatedAt', 'location', 'isPublic'
+            'coverImage', 'memberUids', 'inviteCode', 'updatedAt', 'location', 'isPublic', 'defaultCurrency'
           ])
         ) ||
         // Action: Autonomous Join Trip

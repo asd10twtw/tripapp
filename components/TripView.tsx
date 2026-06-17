@@ -276,6 +276,12 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
         setEditCity(data.city || '');
         setEditStartDate(data.startDate || '');
         setEditEndDate(data.endDate || '');
+        
+        // Only attempt to set default currency if user is a member/owner and it's missing
+        const isActuallyMember = data.memberUids?.includes(user.uid) || data.ownerUid === user.uid;
+        if (!data.defaultCurrency && isActuallyMember) {
+          updateDoc(doc(db, 'trips', tripId), { defaultCurrency: 'KRW' });
+        }
       }
     });
 
@@ -498,7 +504,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
     });
   };
 
-  const handleUpdateTripInfo = async (field: 'name' | 'subtitle' | 'city' | 'startDate' | 'endDate', value: any) => {
+  const handleUpdateTripInfo = async (field: 'name' | 'subtitle' | 'city' | 'startDate' | 'endDate' | 'defaultCurrency', value: any) => {
     if (field === 'name') setEditName(value);
     if (field === 'subtitle') setEditSubtitle(value);
     if (field === 'city') setEditCity(value);
@@ -569,7 +575,7 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
 
     switch (activeTab) {
       case Tab.SCHEDULE: return <ScheduleView members={members} tripId={tripId} startDate={trip.startDate} endDate={trip.endDate} theme={user.profileTheme} isReadOnly={isReadOnly} />;
-      case Tab.EXPENSE: return <ExpenseView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} isReadOnly={isReadOnly} />;
+      case Tab.EXPENSE: return <ExpenseView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} isReadOnly={isReadOnly} defaultCurrency={trip.defaultCurrency} />;
       case Tab.PLANNING: return <PlanningView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} isReadOnly={isReadOnly} />;
       case Tab.JOURNAL: return <JournalView members={members} tripId={tripId} currentUser={user} theme={user.profileTheme} isReadOnly={isReadOnly} />;
       default: return <ScheduleView members={members} tripId={tripId} startDate={trip.startDate} endDate={trip.endDate} isReadOnly={isReadOnly} />;
@@ -975,6 +981,24 @@ export const TripView: React.FC<TripViewProps> = ({ user, onBack }) => {
                           className="w-full bg-transparent border-none outline-none font-bold text-slate-700 text-[11px]"
                         />
                       </div>
+                    </div>
+                    <div className={`${user.profileTheme === 'handdrawn' ? 'p-3' : 'bg-slate-50 p-3 rounded-2xl border border-slate-100'}`}>
+                      <label className="text-[8px] font-black text-slate-300 uppercase mb-1 block">旅程預設幣別 (當前國家貨幣)</label>
+                      <select 
+                        value={trip?.defaultCurrency || 'KRW'} 
+                        onChange={(e) => handleUpdateTripInfo('defaultCurrency', e.target.value)}
+                        className="w-full bg-transparent border-none outline-none font-bold text-slate-700 text-sm appearance-none"
+                      >
+                        <option value="KRW">KRW - 韓元</option>
+                        <option value="JPY">JPY - 日圓</option>
+                        <option value="USD">USD - 美元</option>
+                        <option value="EUR">EUR - 歐元</option>
+                        <option value="THB">THB - 泰銖</option>
+                        <option value="VND">VND - 越南盾</option>
+                        <option value="HKD">HKD - 港幣</option>
+                        <option value="GBP">GBP - 英鎊</option>
+                        <option value="AUD">AUD - 澳幣</option>
+                      </select>
                     </div>
                   </div>
                 </div>

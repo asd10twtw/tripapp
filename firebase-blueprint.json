@@ -11,7 +11,8 @@
         "coverImage": { "type": "string" },
         "memberUids": { "type": "array", "items": { "type": "string" } },
         "ownerUid": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "defaultCurrency": { "type": "string", "description": "Default currency for the trip (e.g., KRW, JPY, USD)" }
       },
       "required": ["name", "startDate", "endDate", "memberUids", "ownerUid", "createdAt"]
     },
@@ -63,13 +64,14 @@
       "properties": {
         "date": { "type": "string" },
         "description": { "type": "string" },
-        "amountKRW": { "type": "number" },
+        "amount": { "type": "number" },
         "amountTWD": { "type": "number" },
+        "currency": { "type": "string" },
         "payerId": { "type": "string" },
         "splitWithIds": { "type": "array", "items": { "type": "string" } },
         "category": { "type": "string" }
       },
-      "required": ["date", "description", "amountKRW", "payerId", "splitWithIds"]
+      "required": ["date", "description", "amount", "payerId", "splitWithIds", "currency"]
     },
     "Todo": {
       "title": "Todo",
